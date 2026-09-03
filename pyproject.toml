@@ -1,0 +1,44 @@
+[project]
+name = "caritas-backend-flask"
+version = "0.1.0"
+description = "Backend Caritas en Flask (migracion 1:1 del backend NestJS)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "flask>=3.1.0",
+    "python-dotenv>=1.0.1",
+    "pymssql>=2.3.2",
+    "bcrypt>=4.2.1",
+    "pyjwt>=2.10.1",
+]
+
+[project.scripts]
+caritas-backend = "caritas_backend.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/caritas_backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["caritas_backend", "conftest"]

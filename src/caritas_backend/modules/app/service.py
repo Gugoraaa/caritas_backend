@@ -1,2 +1,2 @@
 def get_hello() -> str:
-    return "Hello World!"
+    return "Hola mundo desde automatizacion"

@@ -23,11 +23,112 @@ uv run caritas-backend               # idéntico, vía el script del proyecto
 El servidor de desarrollo de Flask no es para producción. Con un WSGI real:
 
 ```bash
-uv run --with gunicorn gunicorn -w 4 -b 0.0.0.0:3000 'caritas_backend:create_app()'
+uv run --group prod gunicorn -w 4 -b 0.0.0.0:3000 'caritas_backend:create_app()'
 ```
+
+`gunicorn` vive en el grupo `prod`, que `uv sync` no instala. Es el mismo
+comando que corre la imagen de Docker.
 
 La app arranca aunque SQL Server esté caído: se loguea un warning y listo. En
 ese estado `GET /` responde 200 y `POST /login` responde 500.
+
+## Docker
+
+```bash
+docker compose up --build    # SQL Server + esquema + datos mock + API en http://localhost:3000
+docker compose down          # baja todo; los datos quedan en el volumen
+docker compose down -v       # baja todo y borra la base
+```
+
+Tres servicios:
+
+| Servicio    | Qué hace                                                                 |
+| ----------- | ------------------------------------------------------------------------ |
+| `sqlserver` | SQL Server 2022 Developer, datos en el volumen `mssql-data`               |
+| `db-init`   | Espera a SQL Server, crea la base `caritas` y le aplica los `.sql` de `db/` |
+| `api`       | La imagen del `Dockerfile`, servida con gunicorn                         |
+
+`db-init` corre una sola vez y termina; `api` no arranca hasta que salga en 0
+(`service_completed_successfully`), así que la base ya está poblada cuando la
+API levanta.
+
+### Usuario de prueba
+
+Después de `docker compose up` ya se puede pegar a `POST /login` con:
+
+| email               | contraseña | role    |
+| ------------------- | ---------- | ------- |
+| `admin@caritas.com` | `admin123` | `admin` |
+
+```bash
+curl -X POST http://localhost:3000/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@caritas.com","password":"admin123"}'
+```
+
+Los usuarios mock (`user1@mock.local` … `user6@mock.local`) llevan un hash de
+relleno a propósito: existen para poblar `Promesas.responsable_id`, no se puede
+hacer login con ellos.
+
+### Qué carga `db-init`, y cuándo
+
+| Carpeta         | Contenido                            | Cuándo se aplica                                  |
+| --------------- | ------------------------------------ | ------------------------------------------------- |
+| `db/schema/`    | `CREATE TABLE`, índices, FKs         | solo si la base no tiene **ninguna** tabla         |
+| `db/seed/`      | datos mock (donantes, causas, …)     | solo si la tabla `Donantes` está vacía             |
+| `db/bootstrap/` | usuario admin                        | **siempre** (el script es idempotente)             |
+
+Dentro de cada carpeta los archivos van en orden alfabético, por eso están
+numerados (`01_`, `02_`, …). No necesitan `CREATE DATABASE` ni `USE`: `db-init`
+ya se conecta a la base correcta.
+
+Los tres pasos son **idempotentes**, así que `up` repetidos no pisan datos.
+El paso de datos mock se controla con `DB_SEED`:
+
+```bash
+docker compose up                  # auto: carga los mock solo si no hay donantes
+DB_SEED=force docker compose up    # borra los mock y los reinserta
+DB_SEED=skip  docker compose up    # base vacía, solo esquema y admin
+```
+
+Para arrancar de cero del todo, `docker compose down -v`.
+
+### A qué base se conecta cada forma de correr
+
+Esto es a propósito y lo resuelve `load_dotenv()`, que **no** sobreescribe
+variables que ya existen en el entorno:
+
+| Cómo levantás la API                     | Base a la que pega                          |
+| ---------------------------------------- | ------------------------------------------- |
+| `docker compose up`                      | el contenedor `sqlserver` (`DB_HOST=sqlserver`) |
+| `uv run python -m caritas_backend`       | la de producción, la del `.env`             |
+
+`docker-compose.yml` inyecta las `DB_*` como variables de entorno del
+contenedor, y ganan. Fuera de Docker no hay nada en el entorno, así que
+`load_dotenv()` carga el `.env` y se usa producción. Además `.env` está en
+`.dockerignore`: las credenciales de producción **no entran a la imagen**.
+
+Las credenciales del compose son locales y de desarrollo (SA
+`Caritas_Local_2026!`, `JWT_SECRET=dev-secret-solo-para-docker`). Para cambiar
+algo sin tocar el archivo versionado, usá un `docker-compose.override.yml`.
+
+Los puertos publicados se pueden mover si están ocupados:
+
+```bash
+API_HOST_PORT=3001 SQLSERVER_HOST_PORT=14330 docker compose up
+```
+
+### Conectarse a la base del contenedor
+
+La imagen de SQL Server 2022 no trae `sqlcmd`, así que se usa la de
+`mssql-tools` que ya está en el compose:
+
+```bash
+docker compose run --rm --entrypoint /opt/mssql-tools/bin/sqlcmd db-init \
+  -S sqlserver,1433 -U sa -P 'Caritas_Local_2026!' -d caritas -Q "SELECT * FROM Users"
+```
+
+O desde el host con cualquier cliente: `localhost:1433`, usuario `sa`.
 
 ## Endpoints
 

@@ -1,0 +1,28 @@
+# .env NUNCA entra a la imagen: apunta a produccion. La config del contenedor
+# viene de docker-compose.yml.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+.venv
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+.ruff_cache/
+.python-version
+
+# El esquema se monta como volumen en el servicio db-init, no se copia.
+db/
+tests/
+
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.override.yml
+docker/

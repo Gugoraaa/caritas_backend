@@ -1,0 +1,89 @@
+# Stack local: SQL Server + esquema de db/ + la API.
+#
+#   docker compose up --build       levanta todo
+#   docker compose down             baja todo (los datos quedan en el volumen)
+#   docker compose down -v          baja todo y borra la base
+#
+# Los valores de aca son de desarrollo y solo aplican dentro de los
+# contenedores. Correr la API con python3/uv fuera de Docker usa .env, es decir
+# la base de produccion. Ver README.md.
+
+name: caritas
+
+x-db-env: &db-env
+  DB_HOST: sqlserver
+  DB_PORT: "1433"
+  DB_NAME: caritas
+  DB_USER: sa
+  DB_PASSWORD: Caritas_Local_2026!
+  # El contenedor de SQL Server usa un certificado autofirmado; en la red
+  # interna de compose no hace falta TLS.
+  DB_ENCRYPT: "false"
+  DB_TRUST_SERVER_CERTIFICATE: "true"
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: caritas-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Caritas_Local_2026!
+      MSSQL_PID: Developer
+    ports:
+      - "${SQLSERVER_HOST_PORT:-1433}:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    restart: unless-stopped
+
+  # Servicio de un solo uso: espera a SQL Server, crea la base, le aplica el
+  # esquema (db/schema), carga los datos mock (db/seed) y asegura el usuario
+  # admin (db/bootstrap). Termina en 0 y la API arranca despues.
+  db-init:
+    image: mcr.microsoft.com/mssql-tools:latest
+    container_name: caritas-db-init
+    depends_on:
+      sqlserver:
+        condition: service_started
+    environment:
+      <<: *db-env
+      # auto = carga los datos mock solo si la base esta vacia.
+      # force = los recarga siempre; skip = no los carga.
+      DB_SEED: "${DB_SEED:-auto}"
+    volumes:
+      - ./db:/schema:ro
+      - ./docker/db-init.sh:/usr/local/bin/db-init.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/db-init.sh"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: caritas-api
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *db-env
+      PORT: "3000"
+      WEB_CONCURRENCY: "4"
+      JWT_SECRET: mwhuHJUEQx1WDpB5GzIov/Eh24qTl5eAU57JjKDX2eui/dwZqMqcKBU+eAHALlyv
+      JWT_EXPIRES_IN: 8h
+    ports:
+      - "${API_HOST_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request
+          urllib.request.urlopen("http://127.0.0.1:3000/", timeout=3).read()
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  mssql-data:

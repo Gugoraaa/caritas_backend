@@ -8,6 +8,8 @@ from .config import get, required
 from .database import Database
 from .errors import register_error_handlers
 from .modules.auth.service import AuthService
+from .modules.donantes.service import DonantesService
+from .modules.historial.service import HistorialService
 from .modules.llamadas.service import CallsService
 from .routes import register_routes
 from .security import parse_duration
@@ -28,6 +30,8 @@ def create_app() -> Flask:
     expires_in = parse_duration(get("JWT_EXPIRES_IN", "8h"))
     app.extensions["auth"] = AuthService(database, required("JWT_SECRET"), expires_in)
     app.extensions["calls"] = CallsService(database)
+    app.extensions["donantes"] = DonantesService(database)
+    app.extensions["historial"] = HistorialService(database)
 
     register_error_handlers(app)
     register_routes(app)

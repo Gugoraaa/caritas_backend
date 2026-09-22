@@ -87,7 +87,8 @@ CREATE TABLE "Abonos"(
     "id" INT NOT NULL,
     "promesa_id" INT NOT NULL,
     "monto" DECIMAL(14, 2) NOT NULL,
-    "fecha_deposito" DATETIME2 NOT NULL
+    "fecha_deposito" DATETIME2 NOT NULL,
+    "metodo" NVARCHAR(30) NULL
 );
 ALTER TABLE
     "Abonos" ADD CONSTRAINT "abonos_id_primary" PRIMARY KEY("id");
@@ -108,7 +109,8 @@ CREATE TABLE "Llamadas"(
             )
         ) NOT NULL,
     "proposito" NVARCHAR(30) NULL,
-    "fecha_agendada" DATETIME2 NULL
+    "fecha_agendada" DATETIME2 NULL,
+    "nota" NVARCHAR(500) NULL
 );
 ALTER TABLE
     "Llamadas" ADD CONSTRAINT "llamadas_id_primary" PRIMARY KEY("id");

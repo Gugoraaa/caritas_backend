@@ -59,8 +59,20 @@ class Database:
             "password": required("DB_PASSWORD"),
             "encryption": "require" if flag("DB_ENCRYPT", True) else "off",
         }
-        log.info("Conectando a %(server)s:%(port)s/%(database)s", settings)
-        return pymssql.connect(**settings)
+        safe_settings = {**settings, "password": f"<{len(settings['password'])} chars>"}
+        log.info("Conectando con settings: %s", safe_settings)
+        try:
+            connection = pymssql.connect(**settings)
+        except Exception as error:
+            log.error(
+                "pymssql.connect fallo. settings=%s error_type=%s error=%r",
+                safe_settings,
+                type(error).__name__,
+                error,
+            )
+            raise
+        log.info("Conexion establecida correctamente")
+        return connection
 
 
 def close_quietly(connection: pymssql.Connection | None) -> None:

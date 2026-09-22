@@ -4,7 +4,7 @@ from ...errors import HttpException
 
 blueprint = Blueprint("llamadas", __name__)
 
-
+#gay el que lo lea
 @blueprint.get("/llamadas/agendadas")
 def agendadas_hoy_manana() -> Response:
     user_id = _parse_user_id()

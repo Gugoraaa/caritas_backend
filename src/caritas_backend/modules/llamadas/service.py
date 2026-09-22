@@ -37,9 +37,12 @@ def to_public_llamada(row: LlamadaRow, hoy: datetime) -> dict:
     )
 
     return {
+        "donante_id": row["donante_id"],
         "nombre": row["nombre"],
         "apellido_paterno": row["apellido_paterno"],
         "apellido_materno": row["apellido_materno"],
+        "llamada_id": row["llamada_id"],
+        "llamada_estado": row["llamada_estado"],
         "fecha_agendada": row["fecha_agendada"].isoformat(),
         "dias_desde_ultimo_abono": dias_desde_ultimo_abono,
         "monto_ultimo_abono": row["ultimo_abono_monto"],

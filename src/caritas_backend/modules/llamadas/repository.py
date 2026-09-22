@@ -2,18 +2,18 @@ from datetime import datetime
 
 from ...database import Database
 
-LlamadaRow = dict
+CallRow = dict
 
 QUERY = """SELECT
-               d.id AS donante_id,
+               d.id AS donor_id,
                d.nombre,
                d.apellido_paterno,
                d.apellido_materno,
-               l.id AS llamada_id,
-               l.estado AS llamada_estado,
+               l.id AS call_id,
+               l.estado AS call_status,
                l.fecha_agendada,
-               ultimo.fecha_deposito AS ultimo_abono_fecha,
-               ultimo.monto AS ultimo_abono_monto
+               ultimo.fecha_deposito AS latest_payment_date,
+               ultimo.monto AS latest_payment_amount
            FROM Llamadas l
            JOIN Promesas p ON p.id = l.promesa_id
            JOIN Donantes d ON d.id = p.donante_id
@@ -30,13 +30,13 @@ QUERY = """SELECT
           ORDER BY l.fecha_agendada;"""
 
 
-class LlamadasRepository:
+class CallsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def find_agendadas_entre(
+    def find_scheduled_between(
         self, user_id: int, start: datetime, end: datetime
-    ) -> list[LlamadaRow]:
+    ) -> list[CallRow]:
         with self._database.connection() as connection:
             cursor = connection.cursor(as_dict=True)
             try:

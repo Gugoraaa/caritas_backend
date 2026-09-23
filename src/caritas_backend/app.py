@@ -11,6 +11,7 @@ from .modules.auth.service import AuthService
 from .modules.donantes.service import DonantesService
 from .modules.historial.service import HistorialService
 from .modules.llamadas.service import CallsService
+from .openapi import register_docs
 from .routes import register_routes
 from .security import parse_duration
 
@@ -35,6 +36,7 @@ def create_app() -> Flask:
 
     register_error_handlers(app)
     register_routes(app)
+    register_docs(app)
     atexit.register(database.close)
 
     try:

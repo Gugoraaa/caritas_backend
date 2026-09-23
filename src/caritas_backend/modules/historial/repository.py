@@ -56,7 +56,7 @@ ACTIVE_PROMISES_QUERY = """SELECT
                                WHERE a.promesa_id = p.id
                            ) pagos
                           WHERE p.responsable_id = %s
-                            AND p.estado = 'activo'
+                            AND p.state = 'activo'
                             AND p.numero_frequencia > 0
                             AND p.tipo_frquencia IS NOT NULL
                             AND p.tipo_frquencia <> 'unica'"""

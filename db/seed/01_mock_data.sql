@@ -181,7 +181,7 @@ IF OBJECTPROPERTY(OBJECT_ID('dbo.Donantes'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Donantes ON;
 
 INSERT INTO dbo.Donantes
-    (id, nombre, apellido_paterno, apellido_materno, nickname, razon_social,
+    (id, nombre, apellido_paterno, apellido_materno, apodo, razon_social,
      curp, email, fecha_creacion, dia_nacimiento, telefono_oficina, telefono)
 SELECT
     @offDonante + n.i,
@@ -258,7 +258,7 @@ IF OBJECTPROPERTY(OBJECT_ID('dbo.Promesas'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Promesas ON;
 
 INSERT INTO dbo.Promesas
-    (id, donante_id, caso_id, monto_objetivo, state, fecha_inicio, fecha_final,
+    (id, donante_id, caso_id, monto_objetivo, estado, fecha_inicio, fecha_final,
      numero_frequencia, tipo_frquencia, responsable_id)
 SELECT
     @offPromesa + n.i,
@@ -299,7 +299,7 @@ SELECT
 FROM dbo.Promesas p
 JOIN @nums k ON k.i <= ((p.id - @offPromesa) * 3) % 5    -- 0..4 abonos
 WHERE p.id > @offPromesa                                 -- solo las recién creadas
-  AND p.state <> N'cancelado'
+  AND p.estado <> N'cancelado'
   AND DATEADD(DAY, k.i * 30, p.fecha_inicio) <= SYSUTCDATETIME();
 
 IF OBJECTPROPERTY(OBJECT_ID('dbo.Abonos'), 'TableHasIdentity') = 1

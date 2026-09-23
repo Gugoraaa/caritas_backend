@@ -10,6 +10,7 @@ dependencies = [
     "pymssql>=2.3.2",
     "bcrypt>=4.2.1",
     "pyjwt>=2.10.1",
+    "flask-swagger-ui>=5.33.0",
 ]
 
 [project.scripts]

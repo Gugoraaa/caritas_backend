@@ -84,6 +84,7 @@ source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },
     { name = "flask" },
+    { name = "flask-swagger-ui" },
     { name = "pyjwt" },
     { name = "pymssql" },
     { name = "python-dotenv" },
@@ -103,6 +104,7 @@ prod = [
 requires-dist = [
     { name = "bcrypt", specifier = ">=4.2.1" },
     { name = "flask", specifier = ">=3.1.0" },
+    { name = "flask-swagger-ui", specifier = ">=5.33.0" },
     { name = "pyjwt", specifier = ">=2.10.1" },
     { name = "pymssql", specifier = ">=2.3.2" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
@@ -233,6 +235,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/26/00/35d85dcce6c57fdc871f3867d465d780f302a175ea360f62533f12b27e2b/flask-3.1.3.tar.gz", hash = "sha256:0ef0e52b8a9cd932855379197dd8f94047b359ca0a78695144304cb45f87c9eb", size = 759004, upload-time = "2026-02-19T05:00:57.678Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/9c/34f6962f9b9e9c71f6e5ed806e0d0ff03c9d1b0b2340088a0cf4bce09b18/flask-3.1.3-py3-none-any.whl", hash = "sha256:f4bcbefc124291925f1a26446da31a5178f9483862233b23c0c96a20701f670c", size = 103424, upload-time = "2026-02-19T05:00:56.027Z" },
+]
+
+[[package]]
+name = "flask-swagger-ui"
+version = "5.33.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flask" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a5/9c/3b4ff2c907d5e4fe872bf593250bf3ef0725da24c26a7348a4df08b86eb1/flask_swagger_ui-5.33.0.tar.gz", hash = "sha256:96ec9bbb2ddc004123b722242111a08f074f04d2c93dfbd3682f7720cd5f80e2", size = 639836, upload-time = "2026-09-21T15:28:29.051Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/f9/c0900ac012e625f902ec3445e22ed6ab5c5325a05416db0c45356c996394/flask_swagger_ui-5.33.0-py3-none-any.whl", hash = "sha256:183a0234fa0e0e001fbb1a5f8a4aa762729f7eaf34ff288bd7a00514a6ab7381", size = 644885, upload-time = "2026-09-21T15:28:27.46Z" },
 ]
 
 [[package]]

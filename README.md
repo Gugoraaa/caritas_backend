@@ -1,4 +1,4 @@
-# caritas_backend_flask
+# caritas_backend_flask :)
 
 Migración a Flask del backend NestJS que vive en `../caritas_backend`.
 

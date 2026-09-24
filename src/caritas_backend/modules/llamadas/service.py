@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from ...database import Database
 from ...errors import HttpException
@@ -10,6 +11,11 @@ INTERNAL_ERROR = "Internal server error"
 DAYS_GREEN = 30
 DAYS_YELLOW = 60
 
+# Monterrey es UTC-6 todo el anio (sin horario de verano desde 2022).
+# El servidor corre en UTC: sin esto, la ventana de "hoy" se voltea a las
+# 18:00 hora local y la pantalla se vacia todas las noches.
+BUSINESS_TIMEZONE = ZoneInfo("America/Monterrey")
+
 log = logging.getLogger(__name__)
 
 
@@ -18,7 +24,7 @@ class CallsService:
         self.calls = CallsRepository(database)
 
     def get_scheduled_today_tomorrow(self, user_id: int) -> list[dict]:
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = today_local()
         tomorrow_end = today + timedelta(days=2)
 
         try:
@@ -28,6 +34,12 @@ class CallsService:
             raise HttpException(500, INTERNAL_ERROR) from error
 
         return [to_public_call(row, today) for row in rows]
+
+
+def today_local(now: datetime | None = None) -> datetime:
+    """Medianoche de hoy en Monterrey, como datetime naive (igual que la DB)."""
+    current = now if now is not None else datetime.now(BUSINESS_TIMEZONE)
+    return current.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
 
 
 def to_public_call(row: CallRow, today: datetime) -> dict:

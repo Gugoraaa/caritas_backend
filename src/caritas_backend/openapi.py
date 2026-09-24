@@ -336,7 +336,13 @@ def build_spec() -> dict:
             "/calls/scheduled": {
                 "get": {
                     "tags": ["calls"],
-                    "summary": "Calls scheduled for today and tomorrow",
+                    "summary": "Obtiene el perfil de los donantes para las llamadas agendadas para hoy y manana",
+                    "description": (
+                        "Se usa en la pantalla principal de las telemarketinas en donde ven las "
+                        "llamadas agendadas para el dia de hoy y manana. Tambien sirve para que "
+                        "las telemarketinas vean el semaforo de los donantes y su progreso con "
+                        "las llamadas."
+                    ),
                     "parameters": [
                         {
                             "name": "user_id",

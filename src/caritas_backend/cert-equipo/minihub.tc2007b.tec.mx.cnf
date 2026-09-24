@@ -1,0 +1,25 @@
+#
+# minihub.tc2007b.tec.mx.cnf
+#
+
+[ req ]
+prompt                  = no
+distinguished_name      = minihub_tc2007b_mx
+req_extensions          = v3_req
+
+[ minihub_tc2007b_mx ]
+commonName              = minihub.tc2007b.tec.mx
+stateOrProvinceName     = NL
+countryName             = MX
+emailAddress            = daniel@medina.com
+organizationName        = TC2007B
+organizationalUnitName  = Equipo 4 MiniHub
+
+[ v3_req ]
+basicConstraints        = CA:FALSE
+keyUsage                = nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName          = @alt_names
+extendedKeyUsage        = serverAuth,clientAuth
+
+[ alt_names ]
+DNS.0                   = minihub.tc2007b.tec.mx

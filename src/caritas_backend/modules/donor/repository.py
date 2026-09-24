@@ -9,7 +9,7 @@ QUERY = """
         d.apellido_materno,
         d.email,
         d.telefono,
-        CAST(NULL AS NVARCHAR(150)) AS colonia,
+        d.colonia,
         d.dia_nacimiento,
         d.fecha_creacion,
         ultimo_abono.fecha_deposito AS ultima_donacion_fecha,

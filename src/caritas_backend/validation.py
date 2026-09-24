@@ -24,6 +24,14 @@ def is_email(value: Any) -> bool:
     return isinstance(value, str) and EMAIL.match(value) is not None
 
 
+def is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def optional(predicate: Callable[[Any], bool]) -> Callable[[Any], bool]:
+    return lambda value: value is None or predicate(value)
+
+
 def read_body() -> Any:
     if request.mimetype == "application/x-www-form-urlencoded":
         return request.form.to_dict()

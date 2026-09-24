@@ -49,6 +49,20 @@ DONOR_DETAIL_SCHEMA = {
     },
 }
 
+CAUSA_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "titulo": {"type": "string"},
+        "descripcion": {"type": "string", "nullable": True},
+        "monto_objetivo": {"type": "number"},
+        "beneficiario": {"type": "string", "nullable": True},
+        "responsable": {"type": "string", "nullable": True},
+        "lugar": {"type": "string", "nullable": True},
+        "fecha_fin": {"type": "string", "format": "date-time", "nullable": True},
+    },
+}
+
 SCHEDULED_CALL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -121,6 +135,7 @@ def build_spec() -> dict:
             "schemas": {
                 "Error": ERROR_SCHEMA,
                 "User": USER_SCHEMA,
+                "Causa": CAUSA_SCHEMA,
                 "DonorDetail": DONOR_DETAIL_SCHEMA,
                 "ScheduledCall": SCHEDULED_CALL_SCHEMA,
                 "HistoryDonor": HISTORY_DONOR_SCHEMA,
@@ -169,6 +184,126 @@ def build_spec() -> dict:
                         "500": ERROR_RESPONSES["500"],
                     },
                 }
+            },
+            "/causas": {
+                "get": {
+                    "tags": ["causas"],
+                    "summary": "List all causas",
+                    "responses": {
+                        "200": {
+                            "description": "Causas",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "array",
+                                        "items": {"$ref": "#/components/schemas/Causa"},
+                                    }
+                                }
+                            },
+                        },
+                        "500": ERROR_RESPONSES["500"],
+                    },
+                },
+                "post": {
+                    "tags": ["causas"],
+                    "summary": "Create a causa",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/Causa"}
+                            }
+                        },
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "Causa created",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/Causa"}
+                                }
+                            },
+                        },
+                        "400": ERROR_RESPONSES["400"],
+                        "500": ERROR_RESPONSES["500"],
+                    },
+                },
+            },
+            "/causas/{causa_id}": {
+                "get": {
+                    "tags": ["causas"],
+                    "summary": "Get a causa",
+                    "parameters": [
+                        {
+                            "name": "causa_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "integer"},
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Causa",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/Causa"}
+                                }
+                            },
+                        },
+                        "404": ERROR_RESPONSES["404"],
+                        "500": ERROR_RESPONSES["500"],
+                    },
+                },
+                "put": {
+                    "tags": ["causas"],
+                    "summary": "Update a causa",
+                    "parameters": [
+                        {
+                            "name": "causa_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "integer"},
+                        }
+                    ],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/Causa"}
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Causa updated",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/Causa"}
+                                }
+                            },
+                        },
+                        "400": ERROR_RESPONSES["400"],
+                        "404": ERROR_RESPONSES["404"],
+                        "500": ERROR_RESPONSES["500"],
+                    },
+                },
+                "delete": {
+                    "tags": ["causas"],
+                    "summary": "Delete a causa",
+                    "parameters": [
+                        {
+                            "name": "causa_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "integer"},
+                        }
+                    ],
+                    "responses": {
+                        "204": {"description": "Causa deleted"},
+                        "404": ERROR_RESPONSES["404"],
+                        "500": ERROR_RESPONSES["500"],
+                    },
+                },
             },
             "/donors/{donor_id}": {
                 "get": {

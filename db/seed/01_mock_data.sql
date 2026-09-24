@@ -26,6 +26,9 @@ DECLARE @N_DONANTES  INT = 40;
 DECLARE @N_CAUSAS    INT = 8;
 DECLARE @N_PROMESAS  INT = 60;
 DECLARE @MOCK_DOMAIN NVARCHAR(50) = N'@mock.local';
+-- Fecha local de Monterrey (UTC-6): las llamadas agendadas se siembran
+-- relativas a HOY para que la pantalla "Hoy" siempre tenga datos.
+DECLARE @hoy DATE = CAST(DATEADD(HOUR, -6, SYSUTCDATETIME()) AS DATE);
 
 BEGIN TRY
 BEGIN TRANSACTION;
@@ -138,20 +141,50 @@ WHERE n.i <= @N_USERS;
 
 IF @usersTieneIdentity = 1
 BEGIN
-    INSERT INTO dbo.Users (name, email, password_hash, role, created_at)
-    OUTPUT inserted.id INTO @users (id)
-    SELECT u.name,
-           u.email,
-           /* hash de relleno, NO es una contraseña utilizable */
-           N'$2y$10$mockmockmockmockmockmockmockmockmockmockmockmockmockmo',
-           u.rol,
-           DATEADD(DAY, -(u.rn * 30), SYSUTCDATETIME())
-    FROM @nuevosUsers u
-    WHERE NOT EXISTS (SELECT 1 FROM dbo.Users e WHERE e.email = u.email);
+    /* Ids 1..N fijos (si estan libres): user1..userN conservan su id entre
+       re-seeds, asi los responsable_id y el user_id de la app no se rompen.
+       Si algun id 1..N ya lo ocupa un usuario real, se usa IDENTITY normal. */
+    IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE id BETWEEN 1 AND @N_USERS)
+    BEGIN
+        SET IDENTITY_INSERT dbo.Users ON;
+
+        INSERT INTO dbo.Users (id, name, email, password_hash, role, created_at)
+        OUTPUT inserted.id INTO @users (id)
+        SELECT u.rn,
+               u.name,
+               u.email,
+               /* hash de relleno, NO es una contraseña utilizable */
+               N'$2y$10$mockmockmockmockmockmockmockmockmockmockmockmockmockmo',
+               u.rol,
+               DATEADD(DAY, -(u.rn * 30), SYSUTCDATETIME())
+        FROM @nuevosUsers u
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.Users e WHERE e.email = u.email);
+
+        SET IDENTITY_INSERT dbo.Users OFF;
+    END
+    ELSE
+    BEGIN
+        INSERT INTO dbo.Users (name, email, password_hash, role, created_at)
+        OUTPUT inserted.id INTO @users (id)
+        SELECT u.name,
+               u.email,
+               /* hash de relleno, NO es una contraseña utilizable */
+               N'$2y$10$mockmockmockmockmockmockmockmockmockmockmockmockmockmo',
+               u.rol,
+               DATEADD(DAY, -(u.rn * 30), SYSUTCDATETIME())
+        FROM @nuevosUsers u
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.Users e WHERE e.email = u.email);
+    END
 END
+
 ELSE
 BEGIN
-    DECLARE @baseUserId INT = ISNULL((SELECT MAX(id) FROM dbo.Users), 0);
+    /* Ids 1..N fijos si estan libres (base 0): user1..userN conservan su id
+       entre re-seeds. Si 1..N esta ocupado, se continua desde MAX(id). */
+    DECLARE @baseUserId INT =
+        CASE WHEN NOT EXISTS (SELECT 1 FROM dbo.Users WHERE id BETWEEN 1 AND @N_USERS)
+             THEN 0
+             ELSE ISNULL((SELECT MAX(id) FROM dbo.Users), 0) END;
 
     INSERT INTO dbo.Users (id, name, email, password_hash, role, created_at)
     OUTPUT inserted.id INTO @users (id)
@@ -276,8 +309,8 @@ SELECT
                  WHEN 1 THEN N'semestral'
                  WHEN 2 THEN N'mensual'
                  ELSE N'trimestral' END,
-    CASE WHEN n.i % 6 = 0 THEN NULL                -- promesas sin responsable
-         ELSE (SELECT u.id FROM @users u WHERE u.rn = (n.i % @nUsers) + 1) END
+    CASE WHEN n.i % 7 = 0 THEN NULL                -- algunas promesas sin responsable
+         ELSE (SELECT u.id FROM @users u WHERE u.rn = ((n.i - 1) % @nUsers) + 1) END
 FROM @nums n
 WHERE n.i <= @N_PROMESAS;
 
@@ -308,12 +341,14 @@ IF OBJECTPROPERTY(OBJECT_ID('dbo.Abonos'), 'TableHasIdentity') = 1
 /* ---------------------------------------------------------------------------
    6. Llamadas  (0 a 2 por promesa)
        "estado" tiene CHECK: solo agendada / cancelada / completada
+       fecha_agendada es relativa a @hoy: ayer, hoy, manana, +2 o +4 dias,
+       para que la ventana de hoy+manana siempre tenga contenido.
    --------------------------------------------------------------------------- */
 IF OBJECTPROPERTY(OBJECT_ID('dbo.Llamadas'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Llamadas ON;
 
 INSERT INTO dbo.Llamadas
-    (id, resultado_llamado, monto_comprometido, estado, proposito, promesa_id)
+    (id, resultado_llamado, monto_comprometido, estado, proposito, fecha_agendada, promesa_id)
 SELECT
     @offLlamada + ROW_NUMBER() OVER (ORDER BY p.id, k.i),
     CASE (p.id + k.i) % 5 WHEN 0 THEN N'contactado'
@@ -330,6 +365,11 @@ SELECT
                           WHEN 1 THEN N'agradecimiento'
                           WHEN 2 THEN N'recordatorio de pago'
                           ELSE N'invitacion a evento' END,
+    DATEADD(HOUR, 9 + (k.i * 3), CONVERT(DATETIME,
+        DATEADD(DAY,
+            CASE (p.id + k.i) % 5 WHEN 0 THEN -1 WHEN 1 THEN 0 WHEN 2 THEN 1
+                                  WHEN 3 THEN 2 ELSE 4 END,
+            @hoy))),
     p.id
 FROM dbo.Promesas p
 JOIN @nums k ON k.i <= ((p.id - @offPromesa) * 7) % 3    -- 0..2 llamadas

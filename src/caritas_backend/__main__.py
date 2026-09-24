@@ -6,9 +6,11 @@ from .app import create_app
 def main() -> None:
     app = create_app()
 
+    print(os.getcwd())
+
     # Update these paths to point to your SSL certificate and key files
-    cert_path = "/home/user01/mnt/caritas_backend/src/caritas_backend/cert-equipo/minihub.tc2007b.tec.mx.cer"
-    key_path = "/home/user01/mnt/caritas_backend/src/caritas_backend/cert-equipo/minihub.tc2007b.tec.mx.key"
+    cert_path = os.getcwd() + "/src/caritas_backend/cert-equipo/minihub.tc2007b.tec.mx.cer"
+    key_path = os.getcwd() + "/src/caritas_backend/cert-equipo/minihub.tc2007b.tec.mx.key"
 
     app.run(
         host="0.0.0.0",

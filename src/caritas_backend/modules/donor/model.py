@@ -10,12 +10,8 @@ class DonorRecord(TypedDict):
     nombre: str
     apellido_paterno: str | None
     apellido_materno: str | None
-    apodo: str | None
-    razon_social: str | None
-    curp: str | None
     email: str | None
     telefono: str | None
-    telefono_oficina: str | None
     colonia: str | None
     dia_nacimiento: datetime | None
     fecha_creacion: datetime

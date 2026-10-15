@@ -1,127 +1,113 @@
-CREATE TABLE "Users"(
-    "id" INT NOT NULL,
-    "name" NVARCHAR(100) NOT NULL,
-    "email" NVARCHAR(255) NOT NULL,
-    "password_hash" NVARCHAR(255) NOT NULL,
-    "role" NVARCHAR(50) NOT NULL,
-    "created_at" DATETIME2 NOT NULL DEFAULT GETDATE()
-);
-ALTER TABLE
-    "Users" ADD CONSTRAINT "users_id_primary" PRIMARY KEY("id");
-CREATE UNIQUE INDEX "users_email_unique" ON
-    "Users"("email");
+/* ============================================================================
+   01_tables.sql
+   Esquema de la base "caritas", copia del de PRODUCCION. Mantener igual:
+   si cambia produccion, se cambia aca, no al reves.
 
-CREATE TABLE "Donantes"(
-    "id" INT NOT NULL,
-    "nombre" NVARCHAR(100) NOT NULL,
-    "apellido_paterno" NVARCHAR(100) NULL,
-    "apellido_materno" NVARCHAR(100) NULL,
-    "apodo" NVARCHAR(100) NULL,
-    "razon_social" NVARCHAR(255) NULL,
-    "curp" NVARCHAR(18) NULL,
-    "email" NVARCHAR(255) NULL,
-    "telefono" NVARCHAR(20) NULL,
-    "telefono_oficina" NVARCHAR(20) NULL,
-    "calle" NVARCHAR(200) NULL,
-    "numero_exterior" NVARCHAR(20) NULL,
-    "numero_interior" NVARCHAR(20) NULL,
-    "colonia" NVARCHAR(150) NULL,
-    "municipio" NVARCHAR(150) NULL,
-    "estado" NVARCHAR(100) NULL,
-    "codigo_postal" NVARCHAR(10) NULL,
-    "pais" NVARCHAR(100) NOT NULL DEFAULT 'México',
-    "dia_nacimiento" DATETIME2 NULL,
-    "fecha_creacion" datetime2(3) NOT NULL DEFAULT SYSUTCDATETIME()
-);
-ALTER TABLE
-    "Donantes" ADD CONSTRAINT "donantes_id_primary" PRIMARY KEY("id");
-CREATE UNIQUE INDEX "donantes_curp_unique" ON
-    "Donantes"("curp");
-CREATE INDEX "donantes_email_index" ON
-    "Donantes"("email");
-CREATE INDEX "donantes_telefono_index" ON
-    "Donantes"("telefono");
+   Diferencias con el DDL que exporta DBeaver de produccion, solo por sintaxis:
+     - "ON DELETE/UPDATE RESTRICT" no existe en SQL Server; el equivalente es
+       el default (NO ACTION), asi que las FKs van sin clausula.
+     - Causas.descripcion sale como nvarchar(8000), que no es valido
+       (nvarchar llega a 4000); se usa NVARCHAR(MAX).
 
-CREATE TABLE "Causas"(
-    "id" INT NOT NULL,
-    "titulo" NVARCHAR(200) NOT NULL,
-    "descripcion" NVARCHAR(MAX) NULL,
-    "monto_objetivo" DECIMAL(14, 2) NOT NULL,
-    "beneficiario" NVARCHAR(255) NULL,
-    "responsable" NVARCHAR(255) NULL,
-    "lugar" NVARCHAR(255) NULL,
-    "fecha_fin" DATETIME2 NULL
-);
-ALTER TABLE
-    "Causas" ADD CONSTRAINT "causas_id_primary" PRIMARY KEY("id");
+   Cosas de produccion que se copian tal cual aunque parezcan raras:
+     - Users.id es IDENTITY; el resto de las tablas asignan el id a mano.
+     - Users.email tiene dos indices UNIQUE (duplicados).
+     - Promesas.state tiene como DEFAULT el texto 'activo, completado,
+       cancelado' (29 caracteres en un nvarchar(20)): un INSERT que no mande
+       state falla por truncamiento. Hay que mandarlo siempre.
+     - Promesas.state y Llamadas.estado no tienen CHECK.
+   ============================================================================ */
 
-CREATE TABLE "Promesas"(
-    "id" INT NOT NULL,
-    "donante_id" INT NOT NULL,
-    "caso_id" INT NOT NULL,
-    "responsable_id" INT NULL,
-    "monto_objetivo" DECIMAL(14, 2) NOT NULL,
-    "estado" NVARCHAR(20) CHECK
-        (
-            "estado" IN(
-                N'activo',
-                N'completado',
-                N'cancelado'
-            )
-        ) NOT NULL DEFAULT 'activo',
-    "fecha_inicio" DATETIME2 NOT NULL,
-    "fecha_final" DATETIME2 NULL,
-    "numero_frequencia" INT NULL,
-    "tipo_frquencia" NVARCHAR(20) NULL
+CREATE TABLE dbo.Causas (
+    id int NOT NULL,
+    titulo nvarchar(200) NOT NULL,
+    fecha_fin datetime2 NULL,
+    descripcion nvarchar(MAX) NULL,
+    monto_objetivo decimal(14,2) NOT NULL,
+    beneficiario nvarchar(255) NULL,
+    responsable nvarchar(255) NULL,
+    lugar nvarchar(255) NULL,
+    CONSTRAINT causas_id_primary PRIMARY KEY (id)
 );
-ALTER TABLE
-    "Promesas" ADD CONSTRAINT "promesas_id_primary" PRIMARY KEY("id");
-CREATE INDEX "promesas_donante_id_index" ON
-    "Promesas"("donante_id");
-CREATE INDEX "promesas_caso_id_index" ON
-    "Promesas"("caso_id");
-CREATE INDEX "promesas_responsable_id_index" ON
-    "Promesas"("responsable_id");
 
-CREATE TABLE "Abonos"(
-    "id" INT NOT NULL,
-    "promesa_id" INT NOT NULL,
-    "monto" DECIMAL(14, 2) NOT NULL,
-    "fecha_deposito" DATETIME2 NOT NULL
+CREATE TABLE dbo.Donantes (
+    id int NOT NULL,
+    nombre nvarchar(100) NOT NULL,
+    apellido_paterno nvarchar(100) NULL,
+    apellido_materno nvarchar(100) NULL,
+    nickname nvarchar(100) NULL,
+    razon_social nvarchar(255) NULL,
+    curp nvarchar(18) NULL,
+    email nvarchar(255) NULL,
+    fecha_creacion datetime2 DEFAULT (sysutcdatetime()) NOT NULL,
+    dia_nacimiento datetime2 NULL,
+    telefono_oficina nvarchar(20) NULL,
+    telefono nvarchar(20) NULL,
+    calle nvarchar(200) NULL,
+    numero_exterior nvarchar(20) NULL,
+    numero_interior nvarchar(20) NULL,
+    colonia nvarchar(150) NULL,
+    municipio nvarchar(150) NULL,
+    estado nvarchar(100) NULL,
+    codigo_postal nvarchar(10) NULL,
+    pais nvarchar(100) DEFAULT (N'México') NOT NULL,
+    CONSTRAINT donantes_id_primary PRIMARY KEY (id)
 );
-ALTER TABLE
-    "Abonos" ADD CONSTRAINT "abonos_id_primary" PRIMARY KEY("id");
-CREATE INDEX "abonos_promesa_id_fecha_deposito_index" ON
-    "Abonos"("promesa_id", "fecha_deposito");
+CREATE UNIQUE INDEX donantes_curp_unique ON dbo.Donantes (curp);
+CREATE INDEX donantes_email_index ON dbo.Donantes (email);
+CREATE INDEX donantes_telefono_index ON dbo.Donantes (telefono);
 
-CREATE TABLE "Llamadas"(
-    "id" INT NOT NULL,
-    "promesa_id" INT NOT NULL,
-    "resultado_llamado" TEXT NOT NULL,
-    "monto_comprometido" DECIMAL(14, 2) NULL,
-    "estado" NVARCHAR(20) CHECK
-        (
-            "estado" IN(
-                N'agendada',
-                N'cancelada',
-                N'completada'
-            )
-        ) NOT NULL,
-    "proposito" NVARCHAR(30) NULL,
-    "fecha_agendada" DATETIME2 NULL
+CREATE TABLE dbo.Users (
+    id int NOT NULL IDENTITY(1,1),
+    name nvarchar(100) NOT NULL,
+    email nvarchar(255) NOT NULL,
+    password_hash nvarchar(255) NOT NULL,
+    [role] nvarchar(50) NOT NULL,
+    created_at datetime2 DEFAULT (getdate()) NOT NULL,
+    CONSTRAINT PK__Users__3213E83FE3CB03F4 PRIMARY KEY (id)
 );
-ALTER TABLE
-    "Llamadas" ADD CONSTRAINT "llamadas_id_primary" PRIMARY KEY("id");
-CREATE INDEX "llamadas_promesa_id_index" ON
-    "Llamadas"("promesa_id");
+CREATE UNIQUE INDEX UQ__Users__AB6E6164BD28C7AF ON dbo.Users (email);
+CREATE UNIQUE INDEX users_email_unique ON dbo.Users (email);
 
-ALTER TABLE
-    "Promesas" ADD CONSTRAINT "promesas_donante_id_foreign" FOREIGN KEY("donante_id") REFERENCES "Donantes"("id");
-ALTER TABLE
-    "Promesas" ADD CONSTRAINT "promesas_caso_id_foreign" FOREIGN KEY("caso_id") REFERENCES "Causas"("id");
-ALTER TABLE
-    "Promesas" ADD CONSTRAINT "promesas_responsable_id_foreign" FOREIGN KEY("responsable_id") REFERENCES "Users"("id");
-ALTER TABLE
-    "Abonos" ADD CONSTRAINT "abonos_promesa_id_foreign" FOREIGN KEY("promesa_id") REFERENCES "Promesas"("id");
-ALTER TABLE
-    "Llamadas" ADD CONSTRAINT "llamadas_promesa_id_foreign" FOREIGN KEY("promesa_id") REFERENCES "Promesas"("id");
+CREATE TABLE dbo.Promesas (
+    id int NOT NULL,
+    donante_id int NOT NULL,
+    caso_id int NOT NULL,
+    monto_objetivo decimal(14,2) NOT NULL,
+    state nvarchar(20) DEFAULT ('activo, completado, cancelado') NOT NULL,
+    fecha_inicio datetime2 NOT NULL,
+    fecha_final datetime2 NULL,
+    numero_frequencia int NULL,
+    tipo_frquencia nvarchar(20) NULL,
+    responsable_id int NULL,
+    CONSTRAINT promesas_id_primary PRIMARY KEY (id),
+    CONSTRAINT promesas_caso_id_foreign FOREIGN KEY (caso_id) REFERENCES dbo.Causas(id),
+    CONSTRAINT promesas_donante_id_foreign FOREIGN KEY (donante_id) REFERENCES dbo.Donantes(id),
+    CONSTRAINT promesas_responsable_id_foreign FOREIGN KEY (responsable_id) REFERENCES dbo.Users(id)
+);
+CREATE INDEX promesas_caso_id_index ON dbo.Promesas (caso_id);
+CREATE INDEX promesas_donante_id_index ON dbo.Promesas (donante_id);
+CREATE INDEX promesas_responsable_id_index ON dbo.Promesas (responsable_id);
+
+CREATE TABLE dbo.Abonos (
+    id int NOT NULL,
+    promesa_id int NOT NULL,
+    monto decimal(14,2) NOT NULL,
+    fecha_deposito datetime2 NOT NULL,
+    CONSTRAINT abonos_id_primary PRIMARY KEY (id),
+    CONSTRAINT abonos_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id)
+);
+CREATE INDEX abonos_promesa_id_fecha_deposito_index ON dbo.Abonos (promesa_id, fecha_deposito);
+
+CREATE TABLE dbo.Llamadas (
+    id int NOT NULL,
+    resultado_llamado text NOT NULL,
+    monto_comprometido decimal(14,2) NULL,
+    estado nvarchar(255) NOT NULL,
+    proposito nvarchar(30) NULL,
+    promesa_id int NOT NULL,
+    fecha_agendada datetime2 NULL,
+    CONSTRAINT llamadas_id_primary PRIMARY KEY (id),
+    CONSTRAINT llamadas_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id)
+);
+CREATE INDEX llamadas_promesa_id_index ON dbo.Llamadas (promesa_id);

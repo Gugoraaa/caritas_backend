@@ -108,7 +108,8 @@ CREATE TABLE "Llamadas"(
             )
         ) NOT NULL,
     "proposito" NVARCHAR(30) NULL,
-    "fecha_agendada" DATETIME2 NULL
+    "fecha_agendada" DATETIME2 NULL,
+    "notas_llamada" NVARCHAR(MAX) NULL
 );
 ALTER TABLE
     "Llamadas" ADD CONSTRAINT "llamadas_id_primary" PRIMARY KEY("id");

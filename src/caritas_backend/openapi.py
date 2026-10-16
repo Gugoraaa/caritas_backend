@@ -108,6 +108,56 @@ HISTORY_ITEM_SCHEMA = {
     },
 }
 
+REGISTER_CALL_REQUEST_SCHEMA = {
+    "type": "object",
+    "required": ["llamada_id", "user_id", "resultado"],
+    "properties": {
+        "llamada_id": {"type": "integer"},
+        "user_id": {
+            "type": "integer",
+            "description": "Usuario que registra; responsable de la promesa nueva.",
+        },
+        "resultado": {
+            "type": "string",
+            "enum": [
+                "promesa de donativo",
+                "volver a llamar",
+                "rechazó",
+                "solicitar baja",
+                "no contestó",
+            ],
+        },
+        "monto_comprometido": {
+            "type": "number",
+            "description": "Obligatorio para 'promesa de donativo'.",
+        },
+        "notas": {
+            "type": "string",
+            "description": "Obligatorio para 'promesa de donativo'.",
+        },
+        "fecha_seguimiento": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Obligatoria para 'volver a llamar' y 'no contestó'.",
+        },
+    },
+}
+
+REGISTER_CALL_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "llamada_id": {"type": "integer"},
+        "estado": {"type": "string", "enum": ["agendada", "completada"]},
+        "resultado": {"type": "string"},
+        "notas": {"type": "string", "nullable": True},
+        "fecha_agendada": {"type": "string", "format": "date-time", "nullable": True},
+        "nueva_llamada_id": {"type": "integer", "nullable": True},
+        "promesa_id": {"type": "integer", "nullable": True},
+    },
+}
+
+REGISTER_CALL_RESPONSE_REF = "#/components/schemas/RegisterCallResponse"
+
 ERROR_RESPONSES = {
     str(code): {
         "description": description,
@@ -119,6 +169,7 @@ ERROR_RESPONSES = {
         400: "Bad request",
         401: "Unauthorized",
         404: "Not found",
+        409: "Conflict",
         500: "Internal server error",
     }.items()
 }
@@ -140,6 +191,8 @@ def build_spec() -> dict:
                 "ScheduledCall": SCHEDULED_CALL_SCHEMA,
                 "HistoryDonor": HISTORY_DONOR_SCHEMA,
                 "HistoryItem": HISTORY_ITEM_SCHEMA,
+                "RegisterCallRequest": REGISTER_CALL_REQUEST_SCHEMA,
+                "RegisterCallResponse": REGISTER_CALL_RESPONSE_SCHEMA,
             }
         },
         "paths": {
@@ -366,6 +419,43 @@ def build_spec() -> dict:
                             },
                         },
                         "400": ERROR_RESPONSES["400"],
+                        "500": ERROR_RESPONSES["500"],
+                    },
+                }
+            },
+            "/registro/llamada": {
+                "post": {
+                    "tags": ["calls"],
+                    "summary": "Registra el resultado de una llamada agendada",
+                    "description": (
+                        "'no contestó' deja la llamada agendada y la mueve a "
+                        "fecha_seguimiento. Los demas resultados la marcan como "
+                        "completada. 'volver a llamar' agenda una llamada nueva en "
+                        "fecha_seguimiento y 'promesa de donativo' crea una promesa "
+                        "unica por monto_comprometido."
+                    ),
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RegisterCallRequest"
+                                }
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Llamada registrada",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": REGISTER_CALL_RESPONSE_REF}
+                                }
+                            },
+                        },
+                        "400": ERROR_RESPONSES["400"],
+                        "404": ERROR_RESPONSES["404"],
+                        "409": ERROR_RESPONSES["409"],
                         "500": ERROR_RESPONSES["500"],
                     },
                 }

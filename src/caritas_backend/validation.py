@@ -28,6 +28,14 @@ def is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+def is_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def one_of(choices: tuple) -> Callable[[Any], bool]:
+    return lambda value: value in choices
+
+
 def optional(predicate: Callable[[Any], bool]) -> Callable[[Any], bool]:
     return lambda value: value is None or predicate(value)
 

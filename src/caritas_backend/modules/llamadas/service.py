@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from ...database import Database
@@ -7,9 +8,29 @@ from ...errors import HttpException
 from .repository import CallRow, CallsRepository
 
 INTERNAL_ERROR = "Internal server error"
+CALL_NOT_FOUND = "Call not found"
+CALL_ALREADY_REGISTERED = "Call is not scheduled; it was already registered"
 
 DAYS_GREEN = 30
 DAYS_YELLOW = 60
+
+RESULT_PROMISE = "promesa de donativo"
+RESULT_CALL_BACK = "volver a llamar"
+RESULT_REJECTED = "rechazó"
+RESULT_UNSUBSCRIBE = "solicitar baja"
+RESULT_NO_ANSWER = "no contestó"
+CALL_RESULTS = (
+    RESULT_PROMISE,
+    RESULT_CALL_BACK,
+    RESULT_REJECTED,
+    RESULT_UNSUBSCRIBE,
+    RESULT_NO_ANSWER,
+)
+RESULTS_NEEDING_FOLLOW_UP = (RESULT_CALL_BACK, RESULT_NO_ANSWER)
+
+STATUS_SCHEDULED = "agendada"
+STATUS_COMPLETED = "completada"
+PENDING_RESULT = "pendiente"
 
 # Monterrey es UTC-6 todo el anio (sin horario de verano desde 2022).
 # El servidor corre en UTC: sin esto, la ventana de "hoy" se voltea a las
@@ -34,6 +55,113 @@ class CallsService:
             raise HttpException(500, INTERNAL_ERROR) from error
 
         return [to_public_call(row, today) for row in rows]
+
+    def register_call(self, data: dict) -> dict:
+        result = data["resultado"]
+        notes = data.get("notas")
+        amount = to_decimal(data.get("monto_comprometido"))
+        follow_up = parse_follow_up(data.get("fecha_seguimiento"))
+
+        if result == RESULT_PROMISE and (amount is None or not notes):
+            raise HttpException(
+                400, f"monto_comprometido and notas are required for '{result}'"
+            )
+        if result in RESULTS_NEEDING_FOLLOW_UP and follow_up is None:
+            raise HttpException(400, f"fecha_seguimiento is required for '{result}'")
+
+        try:
+            call = self.calls.find_call(data["llamada_id"])
+        except Exception as error:
+            log.exception("Failed to fetch call")
+            raise HttpException(500, INTERNAL_ERROR) from error
+
+        if call is None:
+            raise HttpException(404, CALL_NOT_FOUND)
+        if call["estado"] != STATUS_SCHEDULED:
+            raise HttpException(409, CALL_ALREADY_REGISTERED)
+
+        status = STATUS_SCHEDULED if result == RESULT_NO_ANSWER else STATUS_COMPLETED
+        update = {
+            "resultado_llamado": result,
+            "notas_llamada": notes,
+            "estado": status,
+            "monto_comprometido": amount,
+            # Solo "no contestó" mueve esta misma llamada a la nueva fecha.
+            "fecha_agendada": follow_up if result == RESULT_NO_ANSWER else None,
+        }
+        new_call = None
+        if result == RESULT_CALL_BACK:
+            new_call = build_follow_up_call(call, follow_up)
+        new_promise = None
+        if result == RESULT_PROMISE:
+            new_promise = build_promise(call, amount, data["user_id"])
+
+        try:
+            saved = self.calls.register_result(
+                call["id"], update, new_call, new_promise
+            )
+        except Exception as error:
+            log.exception("Failed to register call result")
+            raise HttpException(500, INTERNAL_ERROR) from error
+
+        if saved is None:
+            raise HttpException(409, CALL_ALREADY_REGISTERED)
+
+        return {
+            "llamada_id": call["id"],
+            "estado": status,
+            "resultado": result,
+            "notas": notes,
+            "fecha_agendada": iso_date(update["fecha_agendada"]),
+            "nueva_llamada_id": saved["nueva_llamada_id"],
+            "promesa_id": saved["promesa_id"],
+        }
+
+
+def build_follow_up_call(call: dict, follow_up: datetime) -> dict:
+    return {
+        "promesa_id": call["promesa_id"],
+        "resultado_llamado": PENDING_RESULT,
+        "monto_comprometido": call["monto_comprometido"],
+        "estado": STATUS_SCHEDULED,
+        "proposito": call["proposito"],
+        "fecha_agendada": follow_up,
+    }
+
+
+def build_promise(call: dict, amount: Decimal, user_id: int) -> dict:
+    return {
+        "donante_id": call["donante_id"],
+        "caso_id": call["caso_id"],
+        "responsable_id": user_id,
+        "monto_objetivo": amount,
+        "state": "activo",
+        "fecha_inicio": today_local(),
+        "numero_frequencia": 1,
+        "tipo_frquencia": "unica",
+    }
+
+
+def to_decimal(value: int | float | None) -> Decimal | None:
+    # str() evita arrastrar el error binario del float (0.1 -> 0.1000000000000000055).
+    return None if value is None else Decimal(str(value))
+
+
+def parse_follow_up(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise HttpException(400, "fecha_seguimiento must be an ISO date") from error
+    # La DB guarda hora local de Monterrey sin zona.
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(BUSINESS_TIMEZONE).replace(tzinfo=None)
+    return parsed
+
+
+def iso_date(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 def today_local(now: datetime | None = None) -> datetime:

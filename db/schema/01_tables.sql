@@ -89,6 +89,22 @@ CREATE INDEX promesas_caso_id_index ON dbo.Promesas (caso_id);
 CREATE INDEX promesas_donante_id_index ON dbo.Promesas (donante_id);
 CREATE INDEX promesas_responsable_id_index ON dbo.Promesas (responsable_id);
 
+CREATE TABLE "Llamadas"(
+    "id" INT NOT NULL,
+    "promesa_id" INT NOT NULL,
+    "resultado_llamado" TEXT NOT NULL,
+    "monto_comprometido" DECIMAL(14, 2) NULL,
+    "estado" NVARCHAR(20) CHECK
+        (
+            "estado" IN(
+                N'agendada',
+                N'cancelada',
+                N'completada'
+            )
+        ) NOT NULL,
+    "proposito" NVARCHAR(30) NULL,
+    "fecha_agendada" DATETIME2 NULL,
+    "notas_llamada" NVARCHAR(MAX) NULL
 CREATE TABLE dbo.Abonos (
     id int NOT NULL,
     promesa_id int NOT NULL,

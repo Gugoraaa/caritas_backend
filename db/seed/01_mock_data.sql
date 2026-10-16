@@ -214,7 +214,7 @@ IF OBJECTPROPERTY(OBJECT_ID('dbo.Donantes'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Donantes ON;
 
 INSERT INTO dbo.Donantes
-    (id, nombre, apellido_paterno, apellido_materno, apodo, razon_social,
+    (id, nombre, apellido_paterno, apellido_materno, nickname, razon_social,
      curp, email, fecha_creacion, dia_nacimiento, telefono_oficina, telefono)
 SELECT
     @offDonante + n.i,
@@ -291,7 +291,7 @@ IF OBJECTPROPERTY(OBJECT_ID('dbo.Promesas'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Promesas ON;
 
 INSERT INTO dbo.Promesas
-    (id, donante_id, caso_id, monto_objetivo, estado, fecha_inicio, fecha_final,
+    (id, donante_id, caso_id, monto_objetivo, state, fecha_inicio, fecha_final,
      numero_frequencia, tipo_frquencia, responsable_id)
 SELECT
     @offPromesa + n.i,
@@ -332,7 +332,7 @@ SELECT
 FROM dbo.Promesas p
 JOIN @nums k ON k.i <= ((p.id - @offPromesa) * 3) % 5    -- 0..4 abonos
 WHERE p.id > @offPromesa                                 -- solo las recién creadas
-  AND p.estado <> N'cancelado'
+  AND p.state <> N'cancelado'
   AND DATEADD(DAY, k.i * 30, p.fecha_inicio) <= SYSUTCDATETIME();
 
 IF OBJECTPROPERTY(OBJECT_ID('dbo.Abonos'), 'TableHasIdentity') = 1
@@ -340,7 +340,7 @@ IF OBJECTPROPERTY(OBJECT_ID('dbo.Abonos'), 'TableHasIdentity') = 1
 
 /* ---------------------------------------------------------------------------
    6. Llamadas  (0 a 2 por promesa)
-       "estado" tiene CHECK: solo agendada / cancelada / completada
+       "estado" no tiene CHECK en produccion; se usan agendada / cancelada / completada
        fecha_agendada es relativa a @hoy: ayer, hoy, manana, +2 o +4 dias,
        para que la ventana de hoy+manana siempre tenga contenido.
    --------------------------------------------------------------------------- */

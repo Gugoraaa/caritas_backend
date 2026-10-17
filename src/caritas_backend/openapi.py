@@ -174,6 +174,158 @@ ERROR_RESPONSES = {
     }.items()
 }
 
+COLLECTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "promise_id": {"type": "integer"},
+        "donor_id": {"type": "integer"},
+        "name": {"type": "string"},
+        "last_name": {"type": "string", "nullable": True},
+        "mother_last_name": {"type": "string", "nullable": True},
+        "phone": {"type": "string", "nullable": True},
+        "address": {"type": "string", "nullable": True},
+        "interior_number": {"type": "string", "nullable": True},
+        "amount": {"type": "string", "example": "300.00"},
+        "status": {"type": "string", "enum": ["pendiente", "confirmada"]},
+        "collected_at": {"type": "string", "format": "date-time", "nullable": True},
+        "abono_id": {"type": "integer", "nullable": True},
+    },
+}
+
+COLLECTION_REASON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "code": {"type": "string"},
+        "label": {"type": "string"},
+    },
+}
+
+COLLECTION_REF = "#/components/schemas/Collection"
+PROMISE_ID_PARAM = {
+    "name": "promise_id",
+    "in": "path",
+    "required": True,
+    "schema": {"type": "integer"},
+}
+
+
+def _collection_response(description: str) -> dict:
+    return {
+        "description": description,
+        "content": {"application/json": {"schema": {"$ref": COLLECTION_REF}}},
+    }
+
+
+COLLECTION_PATHS = {
+    "/collections/reasons": {
+        "get": {
+            "tags": ["collections"],
+            "summary": "Motivos de no recoleccion",
+            "responses": {
+                "200": {
+                    "description": "Catalogo de motivos",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/CollectionReason"
+                                },
+                            }
+                        }
+                    },
+                }
+            },
+        }
+    },
+    "/collections/{promise_id}": {
+        "get": {
+            "tags": ["collections"],
+            "summary": "Detalle de la recoleccion de una promesa",
+            "parameters": [PROMISE_ID_PARAM],
+            "responses": {
+                "200": _collection_response("Detalle de la recoleccion"),
+                "404": ERROR_RESPONSES["404"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        }
+    },
+    "/collections/{promise_id}/confirm": {
+        "post": {
+            "tags": ["collections"],
+            "summary": "Confirma la recoleccion y registra el abono",
+            "description": (
+                "Crea un Abono con la cuota de la promesa (o con monto si se "
+                "manda). Solo una confirmacion por promesa al dia."
+            ),
+            "parameters": [PROMISE_ID_PARAM],
+            "requestBody": {
+                "required": False,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {"monto": {"type": "number"}},
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "201": _collection_response("Recoleccion confirmada"),
+                "400": ERROR_RESPONSES["400"],
+                "404": ERROR_RESPONSES["404"],
+                "409": ERROR_RESPONSES["409"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        }
+    },
+    "/collections/{promise_id}/not-collected": {
+        "post": {
+            "tags": ["collections"],
+            "summary": "Motivo de no recoleccion",
+            "description": (
+                "Valida el motivo. Todavia no se guarda: la base no tiene tabla "
+                "de recolecciones, por eso responde 501."
+            ),
+            "parameters": [PROMISE_ID_PARAM],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["reason"],
+                            "properties": {
+                                "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                        "nadie_en_domicilio",
+                                        "reprogramar",
+                                        "domicilio_incorrecto",
+                                        "ya_no_desea_donar",
+                                    ],
+                                }
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "400": ERROR_RESPONSES["400"],
+                "404": ERROR_RESPONSES["404"],
+                "501": {
+                    "description": "Motivo valido, pero aun no se puede guardar",
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/Error"}
+                        }
+                    },
+                },
+            },
+        }
+    },
+}
+
 
 def build_spec() -> dict:
     return {
@@ -193,9 +345,12 @@ def build_spec() -> dict:
                 "HistoryItem": HISTORY_ITEM_SCHEMA,
                 "RegisterCallRequest": REGISTER_CALL_REQUEST_SCHEMA,
                 "RegisterCallResponse": REGISTER_CALL_RESPONSE_SCHEMA,
+                "Collection": COLLECTION_SCHEMA,
+                "CollectionReason": COLLECTION_REASON_SCHEMA,
             }
         },
         "paths": {
+            **COLLECTION_PATHS,
             "/login": {
                 "post": {
                     "tags": ["auth"],

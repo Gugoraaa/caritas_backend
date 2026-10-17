@@ -7,6 +7,7 @@ from .modules.causas.controller import blueprint as causas_blueprint
 from .modules.donor.controller import blueprint as donors_blueprint
 from .modules.historial.controller import blueprint as history_blueprint
 from .modules.llamadas.controller import blueprint as calls_blueprint
+from .modules.recolecciones.controller import blueprint as collections_blueprint
 from .openapi import build_spec
 
 OPENAPI_JSON_URL = "/docs/openapi.json"
@@ -19,6 +20,7 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(causas_blueprint)
     app.register_blueprint(donors_blueprint)
     app.register_blueprint(history_blueprint)
+    app.register_blueprint(collections_blueprint)
 
     app.add_url_rule(OPENAPI_JSON_URL, "openapi_spec", lambda: jsonify(build_spec()))
     app.register_blueprint(

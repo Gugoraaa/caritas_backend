@@ -323,6 +323,7 @@ ERROR_RESPONSES = {
 COLLECTION_SCHEMA = {
     "type": "object",
     "properties": {
+        "id": {"type": "integer"},
         "promise_id": {"type": "integer"},
         "donor_id": {"type": "integer"},
         "name": {"type": "string"},
@@ -331,9 +332,18 @@ COLLECTION_SCHEMA = {
         "phone": {"type": "string", "nullable": True},
         "address": {"type": "string", "nullable": True},
         "interior_number": {"type": "string", "nullable": True},
+        "address_notes": {"type": "string", "nullable": True},
+        "scheduled_at": {"type": "string", "format": "date-time"},
+        "window_start": {"type": "string", "format": "date-time", "nullable": True},
+        "window_end": {"type": "string", "format": "date-time", "nullable": True},
         "amount": {"type": "string", "example": "300.00"},
-        "status": {"type": "string", "enum": ["pendiente", "confirmada"]},
-        "collected_at": {"type": "string", "format": "date-time", "nullable": True},
+        "status": {
+            "type": "string",
+            "enum": ["pendiente", "confirmada", "no_recolectada"],
+        },
+        "reason": {"type": "string", "nullable": True},
+        "reason_label": {"type": "string", "nullable": True},
+        "resolved_at": {"type": "string", "format": "date-time", "nullable": True},
         "abono_id": {"type": "integer", "nullable": True},
     },
 }
@@ -347,12 +357,18 @@ COLLECTION_REASON_SCHEMA = {
 }
 
 COLLECTION_REF = "#/components/schemas/Collection"
-PROMISE_ID_PARAM = {
-    "name": "promise_id",
+COLLECTION_ID_PARAM = {
+    "name": "collection_id",
     "in": "path",
     "required": True,
     "schema": {"type": "integer"},
 }
+NOT_COLLECTED_REASON_CODES = [
+    "nadie_en_domicilio",
+    "reprogramar",
+    "domicilio_incorrecto",
+    "ya_no_desea_donar",
+]
 
 
 def _collection_response(description: str) -> dict:
@@ -384,56 +400,47 @@ COLLECTION_PATHS = {
             },
         }
     },
-    "/collections/{promise_id}": {
+    "/collections/{collection_id}": {
         "get": {
             "tags": ["collections"],
-            "summary": "Detalle de la recoleccion de una promesa",
-            "parameters": [PROMISE_ID_PARAM],
+            "summary": "Detalle de una recoleccion",
+            "description": "Pantalla 'Detalle de la recoleccion' del recolector.",
+            "security": BEARER,
+            "parameters": [COLLECTION_ID_PARAM],
             "responses": {
                 "200": _collection_response("Detalle de la recoleccion"),
+                "401": ERROR_RESPONSES["401"],
                 "404": ERROR_RESPONSES["404"],
                 "500": ERROR_RESPONSES["500"],
             },
         }
     },
-    "/collections/{promise_id}/confirm": {
+    "/collections/{collection_id}/confirm": {
         "post": {
             "tags": ["collections"],
             "summary": "Confirma la recoleccion y registra el abono",
             "description": (
-                "Crea un Abono con la cuota de la promesa (o con monto si se "
-                "manda). Solo una confirmacion por promesa al dia."
+                "Marca la recoleccion como confirmada y crea un Abono en efectivo "
+                "por su monto, en una sola transaccion. Solo si esta pendiente."
             ),
-            "parameters": [PROMISE_ID_PARAM],
-            "requestBody": {
-                "required": False,
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "type": "object",
-                            "properties": {"monto": {"type": "number"}},
-                        }
-                    }
-                },
-            },
+            "security": BEARER,
+            "parameters": [COLLECTION_ID_PARAM],
             "responses": {
-                "201": _collection_response("Recoleccion confirmada"),
-                "400": ERROR_RESPONSES["400"],
+                "200": _collection_response("Recoleccion confirmada"),
+                "401": ERROR_RESPONSES["401"],
                 "404": ERROR_RESPONSES["404"],
                 "409": ERROR_RESPONSES["409"],
                 "500": ERROR_RESPONSES["500"],
             },
         }
     },
-    "/collections/{promise_id}/not-collected": {
+    "/collections/{collection_id}/not-collected": {
         "post": {
             "tags": ["collections"],
-            "summary": "Motivo de no recoleccion",
-            "description": (
-                "Valida el motivo. Todavia no se guarda: la base no tiene tabla "
-                "de recolecciones, por eso responde 501."
-            ),
-            "parameters": [PROMISE_ID_PARAM],
+            "summary": "Registra el motivo de no recoleccion",
+            "description": "Solo si la recoleccion esta pendiente.",
+            "security": BEARER,
+            "parameters": [COLLECTION_ID_PARAM],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -444,12 +451,7 @@ COLLECTION_PATHS = {
                             "properties": {
                                 "reason": {
                                     "type": "string",
-                                    "enum": [
-                                        "nadie_en_domicilio",
-                                        "reprogramar",
-                                        "domicilio_incorrecto",
-                                        "ya_no_desea_donar",
-                                    ],
+                                    "enum": NOT_COLLECTED_REASON_CODES,
                                 }
                             },
                         }
@@ -457,16 +459,12 @@ COLLECTION_PATHS = {
                 },
             },
             "responses": {
+                "200": _collection_response("Motivo registrado"),
                 "400": ERROR_RESPONSES["400"],
+                "401": ERROR_RESPONSES["401"],
                 "404": ERROR_RESPONSES["404"],
-                "501": {
-                    "description": "Motivo valido, pero aun no se puede guardar",
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/Error"}
-                        }
-                    },
-                },
+                "409": ERROR_RESPONSES["409"],
+                "500": ERROR_RESPONSES["500"],
             },
         }
     },

@@ -1,15 +1,23 @@
 from datetime import datetime
+from decimal import Decimal
 
 from ...database import Database
 
 CollectionRow = dict
 
-# Una recoleccion es el cobro a domicilio de la cuota de una promesa.
 FIND_QUERY = """SELECT
-                    p.id AS promesa_id,
-                    p.state,
-                    p.monto_objetivo,
-                    p.numero_frequencia,
+                    r.id,
+                    r.promesa_id,
+                    r.recolector_id,
+                    r.fecha_programada,
+                    r.ventana_inicio,
+                    r.ventana_fin,
+                    r.monto,
+                    r.notas_domicilio,
+                    r.estado,
+                    r.motivo,
+                    r.fecha_resultado,
+                    r.abono_id,
                     d.id AS donor_id,
                     d.nombre,
                     d.apellido_paterno,
@@ -19,55 +27,94 @@ FIND_QUERY = """SELECT
                     d.numero_exterior,
                     d.numero_interior,
                     d.colonia,
-                    d.municipio,
-                    pagos.total_pagado,
-                    hoy.id AS abono_hoy_id,
-                    hoy.monto AS abono_hoy_monto,
-                    hoy.fecha_deposito AS abono_hoy_fecha
-                FROM Promesas p
+                    d.municipio
+                FROM Recolecciones r
+                JOIN Promesas p ON p.id = r.promesa_id
                 JOIN Donantes d ON d.id = p.donante_id
-                OUTER APPLY (
-                    SELECT SUM(a.monto) AS total_pagado
-                    FROM Abonos a
-                    WHERE a.promesa_id = p.id
-                ) pagos
-                OUTER APPLY (
-                    SELECT TOP 1 a.id, a.monto, a.fecha_deposito
-                    FROM Abonos a
-                    WHERE a.promesa_id = p.id
-                      AND a.fecha_deposito >= %s
-                    ORDER BY a.fecha_deposito DESC
-                ) hoy
-               WHERE p.id = %s;"""
+               WHERE r.id = %s;"""
+
+# El filtro por estado evita confirmar o cerrar dos veces la misma recoleccion
+# si llegan dos peticiones al mismo tiempo.
+CONFIRM_QUERY = """UPDATE Recolecciones
+                      SET estado = 'confirmada',
+                          fecha_resultado = %s,
+                          recolector_id = COALESCE(recolector_id, %s)
+                    WHERE id = %s
+                      AND estado = 'pendiente';"""
 
 # Los id de Abonos no son IDENTITY: MAX(id) + 1 con UPDLOCK/HOLDLOCK para que
 # dos inserts simultaneos no tomen el mismo id.
-INSERT_ABONO_QUERY = """INSERT INTO Abonos (id, promesa_id, monto, fecha_deposito)
+INSERT_ABONO_QUERY = """INSERT INTO Abonos
+                            (id, promesa_id, monto, fecha_deposito, metodo_pago)
                         OUTPUT INSERTED.id
-                        SELECT ISNULL(MAX(id), 0) + 1, %s, %s, %s
+                        SELECT ISNULL(MAX(id), 0) + 1, %s, %s, %s, N'efectivo'
                           FROM Abonos WITH (UPDLOCK, HOLDLOCK);"""
+
+LINK_ABONO_QUERY = """UPDATE Recolecciones SET abono_id = %s WHERE id = %s;"""
+
+NOT_COLLECTED_QUERY = """UPDATE Recolecciones
+                            SET estado = 'no_recolectada',
+                                motivo = %s,
+                                fecha_resultado = %s,
+                                recolector_id = COALESCE(recolector_id, %s)
+                          WHERE id = %s
+                            AND estado = 'pendiente';"""
 
 
 class CollectionsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def find(self, promise_id: int, today: datetime) -> CollectionRow | None:
+    def find(self, collection_id: int) -> CollectionRow | None:
         with self._database.connection() as connection:
             cursor = connection.cursor(as_dict=True)
             try:
-                cursor.execute(FIND_QUERY, (today, promise_id))
+                cursor.execute(FIND_QUERY, (collection_id,))
                 return cursor.fetchone()
             finally:
                 cursor.close()
 
-    def insert_abono(self, promise_id: int, amount, collected_at: datetime) -> int:
+    def confirm(
+        self,
+        collection_id: int,
+        promise_id: int,
+        amount: Decimal,
+        collected_at: datetime,
+        user_id: int,
+    ) -> int | None:
+        """Marca la recoleccion y crea su abono en una sola transaccion.
+
+        Regresa el id del abono, o None si la recoleccion ya no estaba pendiente.
+        """
         with self._database.connection() as connection:
             cursor = connection.cursor(as_dict=True)
             try:
+                cursor.execute(CONFIRM_QUERY, (collected_at, user_id, collection_id))
+                if cursor.rowcount == 0:
+                    connection.rollback()
+                    return None
+
                 cursor.execute(INSERT_ABONO_QUERY, (promise_id, amount, collected_at))
                 abono_id = cursor.fetchone()["id"]
+                cursor.execute(LINK_ABONO_QUERY, (abono_id, collection_id))
+
                 connection.commit()
                 return abono_id
+            finally:
+                cursor.close()
+
+    def mark_not_collected(
+        self, collection_id: int, reason: str, resolved_at: datetime, user_id: int
+    ) -> bool:
+        """False si la recoleccion ya no estaba pendiente."""
+        with self._database.connection() as connection:
+            cursor = connection.cursor(as_dict=True)
+            try:
+                cursor.execute(
+                    NOT_COLLECTED_QUERY, (reason, resolved_at, user_id, collection_id)
+                )
+                updated = cursor.rowcount > 0
+                connection.commit()
+                return updated
             finally:
                 cursor.close()

@@ -11,19 +11,31 @@ FIELDS = (
     "fecha_fin",
 )
 
+# Lo recaudado sale de los abonos de las promesas de cada causa, en la misma
+# query para no hacer una consulta por causa. ISNULL conserva el decimal(38,2)
+# de SUM, asi que una causa sin abonos devuelve 0.00.
+SELECT_WITH_RAISED = """SELECT c.*, ISNULL(recaudado.total, 0) AS monto_recaudado
+                          FROM Causas c
+                          OUTER APPLY (
+                              SELECT SUM(a.monto) AS total
+                              FROM Promesas p
+                              JOIN Abonos a ON a.promesa_id = p.id
+                              WHERE p.caso_id = c.id
+                          ) recaudado"""
+
 
 class CausaRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
     def find_all(self) -> list[CausaRecord]:
-        return self._fetch_all("SELECT * FROM Causas ORDER BY id;", [])
+        return self._fetch_all(f"{SELECT_WITH_RAISED} ORDER BY c.id;", [])
 
     def find_by_id(self, causa_id: int) -> CausaRecord | None:
         with self._database.connection() as connection:
             cursor = connection.cursor(as_dict=True)
             try:
-                cursor.execute("SELECT * FROM Causas WHERE id = %s;", (causa_id,))
+                cursor.execute(f"{SELECT_WITH_RAISED} WHERE c.id = %s;", (causa_id,))
                 return cursor.fetchone()
             finally:
                 cursor.close()

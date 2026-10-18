@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, datetime
 
 from ...database import Database
 from ...errors import HttpException
@@ -35,11 +35,7 @@ class DonorService:
 def to_donor_detail(donor: DonorRecord, today: date) -> DonorDetail:
     full_name = build_full_name(donor)
     last_donation_at = donor["ultima_donacion_fecha"]
-    days_without_donating = (
-        max((today - last_donation_at.date()).days, 0)
-        if last_donation_at is not None
-        else None
-    )
+    days_without_donating = days_since(last_donation_at, today)
 
     risk: RiskInfo = {
         "level": get_risk_level(days_without_donating),
@@ -89,6 +85,10 @@ def completed_years(start: date, end: date) -> int:
     years = end.year - start.year
     anniversary_has_passed = (end.month, end.day) >= (start.month, start.day)
     return max(years - (not anniversary_has_passed), 0)
+
+
+def days_since(moment: datetime | None, today: date) -> int | None:
+    return max((today - moment.date()).days, 0) if moment is not None else None
 
 
 def get_risk_level(days_without_donating: int | None) -> str:

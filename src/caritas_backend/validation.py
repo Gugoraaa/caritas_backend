@@ -28,6 +28,18 @@ def is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+def max_length(limit: int) -> Callable[[Any], bool]:
+    return lambda value: isinstance(value, str) and len(value) <= limit
+
+
+def min_value(limit: float) -> Callable[[Any], bool]:
+    return lambda value: is_number(value) and value >= limit
+
+
+def is_in(choices: tuple) -> Callable[[Any], bool]:
+    return lambda value: value in choices
+
+
 def is_integer(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 

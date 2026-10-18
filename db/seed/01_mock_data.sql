@@ -319,21 +319,30 @@ IF OBJECTPROPERTY(OBJECT_ID('dbo.Promesas'), 'TableHasIdentity') = 1
 
 /* ---------------------------------------------------------------------------
    5. Abonos  (entre 0 y 4 por promesa; las canceladas no abonan)
+       metodo_pago: id multiplo de 3 -> 'spei', el resto 'efectivo'.
    --------------------------------------------------------------------------- */
 IF OBJECTPROPERTY(OBJECT_ID('dbo.Abonos'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Abonos ON;
 
-INSERT INTO dbo.Abonos (id, promesa_id, monto, fecha_deposito)
+INSERT INTO dbo.Abonos (id, promesa_id, monto, fecha_deposito, metodo_pago)
 SELECT
-    @offAbono + ROW_NUMBER() OVER (ORDER BY p.id, k.i),
-    p.id,
-    CAST(p.monto_objetivo / (((p.id - @offPromesa) % 4) + 2) AS DECIMAL(14, 2)),
-    DATEADD(DAY, k.i * 30, p.fecha_inicio)
+    numerados.id,
+    numerados.promesa_id,
+    numerados.monto,
+    numerados.fecha_deposito,
+    CASE WHEN numerados.id % 3 = 0 THEN N'spei' ELSE N'efectivo' END
+FROM (
+SELECT
+    @offAbono + ROW_NUMBER() OVER (ORDER BY p.id, k.i) AS id,
+    p.id AS promesa_id,
+    CAST(p.monto_objetivo / (((p.id - @offPromesa) % 4) + 2) AS DECIMAL(14, 2)) AS monto,
+    DATEADD(DAY, k.i * 30, p.fecha_inicio) AS fecha_deposito
 FROM dbo.Promesas p
 JOIN @nums k ON k.i <= ((p.id - @offPromesa) * 3) % 5    -- 0..4 abonos
 WHERE p.id > @offPromesa                                 -- solo las recién creadas
   AND p.state <> N'cancelado'
-  AND DATEADD(DAY, k.i * 30, p.fecha_inicio) <= SYSUTCDATETIME();
+  AND DATEADD(DAY, k.i * 30, p.fecha_inicio) <= SYSUTCDATETIME()
+) numerados;
 
 IF OBJECTPROPERTY(OBJECT_ID('dbo.Abonos'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Abonos OFF;

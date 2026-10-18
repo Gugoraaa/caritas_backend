@@ -1,6 +1,7 @@
 from flask import Blueprint, Response, current_app, jsonify, request
 
 from ...errors import HttpException
+from ..auth.guard import user_id_from_token_or_query
 from .service import HISTORY_TYPES
 
 blueprint = Blueprint("history", __name__)
@@ -11,7 +12,7 @@ def get_history() -> Response:
     history_service = current_app.extensions["history"]
     return jsonify(
         history_service.get_history(
-            _parse_user_id(),
+            user_id_from_token_or_query(),
             _parse_donor_id(),
             _parse_choice("type", HISTORY_TYPES) or "all",
             _parse_search(),
@@ -22,14 +23,7 @@ def get_history() -> Response:
 @blueprint.get("/history/donors")
 def get_history_donors() -> Response:
     history_service = current_app.extensions["history"]
-    return jsonify(history_service.get_donors(_parse_user_id()))
-
-
-def _parse_user_id() -> int:
-    raw = request.args.get("user_id")
-    if not raw or not raw.isdigit():
-        raise HttpException(400, "user_id must be an integer")
-    return int(raw)
+    return jsonify(history_service.get_donors(user_id_from_token_or_query()))
 
 
 def _parse_donor_id() -> int | None:

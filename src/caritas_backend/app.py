@@ -7,6 +7,7 @@ from flask import Flask
 from .config import get, required
 from .database import Database
 from .errors import register_error_handlers
+from .modules.admin.service import AdminService
 from .modules.auth.service import AuthService
 from .modules.causas.service import CausaService
 from .modules.donor.service import DonorService
@@ -30,6 +31,7 @@ def create_app() -> Flask:
     database = Database()
     app.extensions["database"] = database
     expires_in = parse_duration(get("JWT_EXPIRES_IN", "8h"))
+    app.extensions["admin"] = AdminService(database)
     app.extensions["auth"] = AuthService(database, required("JWT_SECRET"), expires_in)
     app.extensions["calls"] = CallsService(database)
     app.extensions["causas"] = CausaService(database)

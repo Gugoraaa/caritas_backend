@@ -2,7 +2,8 @@ import logging
 
 from ...database import Database
 from ...errors import HttpException
-from .model import CausaRecord
+from .labels import with_labels
+from .model import Causa
 from .repository import CausaRepository
 
 INTERNAL_ERROR = "Internal server error"
@@ -15,14 +16,16 @@ class CausaService:
     def __init__(self, database: Database) -> None:
         self.causas = CausaRepository(database)
 
-    def list_all(self) -> list[CausaRecord]:
+    def list_all(self) -> list[Causa]:
         try:
-            return self.causas.find_all()
+            rows = self.causas.find_all()
         except Exception as error:
             log.exception("Failed to list causas")
             raise HttpException(500, INTERNAL_ERROR) from error
 
-    def get_detail(self, causa_id: int) -> CausaRecord:
+        return [with_labels(row) for row in rows]
+
+    def get_detail(self, causa_id: int) -> Causa:
         try:
             causa = self.causas.find_by_id(causa_id)
         except Exception as error:
@@ -32,9 +35,9 @@ class CausaService:
         if causa is None:
             raise HttpException(404, CAUSA_NOT_FOUND)
 
-        return causa
+        return with_labels(causa)
 
-    def create(self, data: dict) -> CausaRecord:
+    def create(self, data: dict) -> Causa:
         try:
             new_id = self.causas.insert(data)
         except Exception as error:
@@ -43,7 +46,7 @@ class CausaService:
 
         return self.get_detail(new_id)
 
-    def update(self, causa_id: int, data: dict) -> CausaRecord:
+    def update(self, causa_id: int, data: dict) -> Causa:
         try:
             affected = self.causas.update(causa_id, data)
         except Exception as error:

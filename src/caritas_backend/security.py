@@ -32,3 +32,10 @@ def sign_token(payload: dict, secret: str, expires_in: int) -> str:
     issued_at = int(time.time())
     claims = {**payload, "iat": issued_at, "exp": issued_at + expires_in}
     return jwt.encode(claims, secret, algorithm=ALGORITHM)
+
+
+def decode_token(token: str, secret: str) -> dict:
+    """Devuelve los claims; lanza jwt.InvalidTokenError si es invalido o expiro."""
+    return jwt.decode(
+        token, secret, algorithms=[ALGORITHM], options={"require": ["exp"]}
+    )

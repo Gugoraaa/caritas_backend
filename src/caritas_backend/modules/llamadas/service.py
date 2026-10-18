@@ -32,7 +32,6 @@ CALL_RESULTS = (
     RESULT_UNSUBSCRIBE,
     RESULT_NO_ANSWER,
 )
-RESULTS_NEEDING_FOLLOW_UP = (RESULT_CALL_BACK, RESULT_NO_ANSWER)
 
 STATUS_SCHEDULED = "agendada"
 STATUS_COMPLETED = "completada"
@@ -89,18 +88,39 @@ class CallsService:
     def register_call(self, data: dict) -> dict:
         result = data["resultado"]
         notes = data.get("notas")
-        amount = to_decimal(data.get("monto_comprometido"))
-        follow_up = parse_follow_up(data.get("fecha_seguimiento"))
+        call = self._find_scheduled_call(data["llamada_id"])
+        new_call = None
+        new_promise = None
 
-        if result == RESULT_PROMISE and (amount is None or not notes):
-            raise HttpException(
-                400, f"monto_comprometido and notas are required for '{result}'"
+        if result == RESULT_PROMISE:
+            amount = to_decimal(require(data, "monto_comprometido"))
+            require(data, "notas")
+            follow_up = parse_follow_up(require(data, "fecha_seguimiento"))
+            update = call_update(result, notes, STATUS_COMPLETED, amount=amount)
+            new_promise = build_promise(call, amount, data["user_id"])
+            new_call = build_follow_up_call(call, follow_up, None, amount)
+        elif result == RESULT_CALL_BACK:
+            follow_up = parse_follow_up(require(data, "fecha_seguimiento"))
+            update = call_update(result, notes, STATUS_COMPLETED)
+            new_call = build_follow_up_call(
+                call, follow_up, call["promesa_id"], call["monto_comprometido"]
             )
-        if result in RESULTS_NEEDING_FOLLOW_UP and follow_up is None:
-            raise HttpException(400, f"fecha_seguimiento is required for '{result}'")
+        elif result == RESULT_NO_ANSWER:
+            # Esta misma llamada sigue agendada y se mueve a la nueva fecha.
+            follow_up = parse_follow_up(require(data, "fecha_seguimiento"))
+            update = call_update(
+                result, notes, STATUS_SCHEDULED, scheduled_at=follow_up
+            )
+        elif result in (RESULT_REJECTED, RESULT_UNSUBSCRIBE):
+            # Solo se guardan el resultado y las notas.
+            update = call_update(result, notes, STATUS_COMPLETED)
 
+        self._save(call["id"], update, new_call, new_promise)
+        return {"message": "ok"}
+
+    def _find_scheduled_call(self, call_id: int) -> dict:
         try:
-            call = self.calls.find_call(data["llamada_id"])
+            call = self.calls.find_call(call_id)
         except Exception as error:
             log.exception("Failed to fetch call")
             raise HttpException(500, INTERNAL_ERROR) from error
@@ -109,50 +129,55 @@ class CallsService:
             raise HttpException(404, CALL_NOT_FOUND)
         if call["estado"] != STATUS_SCHEDULED:
             raise HttpException(409, CALL_ALREADY_REGISTERED)
+        return call
 
-        status = STATUS_SCHEDULED if result == RESULT_NO_ANSWER else STATUS_COMPLETED
-        update = {
-            "resultado_llamado": result,
-            "notas_llamada": notes,
-            "estado": status,
-            "monto_comprometido": amount,
-            # Solo "no contestó" mueve esta misma llamada a la nueva fecha.
-            "fecha_agendada": follow_up if result == RESULT_NO_ANSWER else None,
-        }
-        new_call = None
-        if result == RESULT_CALL_BACK:
-            new_call = build_follow_up_call(call, follow_up)
-        new_promise = None
-        if result == RESULT_PROMISE:
-            new_promise = build_promise(call, amount, data["user_id"])
-
+    def _save(
+        self,
+        call_id: int,
+        update: dict,
+        new_call: dict | None,
+        new_promise: dict | None,
+    ) -> None:
         try:
-            saved = self.calls.register_result(
-                call["id"], update, new_call, new_promise
-            )
+            saved = self.calls.register_result(call_id, update, new_call, new_promise)
         except Exception as error:
             log.exception("Failed to register call result")
             raise HttpException(500, INTERNAL_ERROR) from error
 
-        if saved is None:
+        if not saved:
             raise HttpException(409, CALL_ALREADY_REGISTERED)
 
-        return {
-            "llamada_id": call["id"],
-            "estado": status,
-            "resultado": result,
-            "notas": notes,
-            "fecha_agendada": iso_date(update["fecha_agendada"]),
-            "nueva_llamada_id": saved["nueva_llamada_id"],
-            "promesa_id": saved["promesa_id"],
-        }
+
+def require(data: dict, field: str):
+    value = data.get(field)
+    if value is None or value == "":
+        raise HttpException(400, f"{field} is required for '{data['resultado']}'")
+    return value
 
 
-def build_follow_up_call(call: dict, follow_up: datetime) -> dict:
+def call_update(
+    result: str,
+    notes: str | None,
+    status: str,
+    amount: Decimal | None = None,
+    scheduled_at: datetime | None = None,
+) -> dict:
     return {
-        "promesa_id": call["promesa_id"],
+        "resultado_llamado": result,
+        "notas_llamada": notes,
+        "estado": status,
+        "monto_comprometido": amount,
+        "fecha_agendada": scheduled_at,
+    }
+
+
+def build_follow_up_call(
+    call: dict, follow_up: datetime, promise_id: int | None, amount: Decimal | None
+) -> dict:
+    return {
+        "promesa_id": promise_id,
         "resultado_llamado": PENDING_RESULT,
-        "monto_comprometido": call["monto_comprometido"],
+        "monto_comprometido": amount,
         "estado": STATUS_SCHEDULED,
         "proposito": call["proposito"],
         "fecha_agendada": follow_up,
@@ -172,14 +197,12 @@ def build_promise(call: dict, amount: Decimal, user_id: int) -> dict:
     }
 
 
-def to_decimal(value: int | float | None) -> Decimal | None:
+def to_decimal(value: int | float) -> Decimal:
     # str() evita arrastrar el error binario del float (0.1 -> 0.1000000000000000055).
-    return None if value is None else Decimal(str(value))
+    return Decimal(str(value))
 
 
-def parse_follow_up(value: str | None) -> datetime | None:
-    if not value:
-        return None
+def parse_follow_up(value: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError as error:
@@ -188,10 +211,6 @@ def parse_follow_up(value: str | None) -> datetime | None:
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(BUSINESS_TIMEZONE).replace(tzinfo=None)
     return parsed
-
-
-def iso_date(value: datetime | None) -> str | None:
-    return value.isoformat() if value else None
 
 
 def today_local(now: datetime | None = None) -> datetime:

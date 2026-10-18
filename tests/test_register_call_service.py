@@ -18,9 +18,9 @@ CALL = {
 
 
 class FakeCallsRepository:
-    def __init__(self, call=CALL, saved=None, error=None):
+    def __init__(self, call=CALL, saved=True, error=None):
         self.call = call
-        self.saved = saved or {"nueva_llamada_id": None, "promesa_id": None}
+        self.saved = saved
         self.error = error
         self.registered = None
 
@@ -58,12 +58,12 @@ def test_closing_results_complete_the_call_without_side_effects(result):
     assert update["fecha_agendada"] is None
     assert new_call is None
     assert new_promise is None
-    assert response["estado"] == "completada"
+    assert response == {"message": "ok"}
 
 
 def test_no_answer_keeps_call_scheduled_and_moves_its_date():
     repository = FakeCallsRepository()
-    response = make_service(repository).register_call(
+    make_service(repository).register_call(
         body(resultado="no contestó", fecha_seguimiento="2026-10-20T10:00:00")
     )
 
@@ -71,12 +71,11 @@ def test_no_answer_keeps_call_scheduled_and_moves_its_date():
     assert update["estado"] == "agendada"
     assert update["fecha_agendada"] == datetime(2026, 10, 20, 10, 0)
     assert new_call is None
-    assert response["fecha_agendada"] == "2026-10-20T10:00:00"
 
 
 def test_call_back_completes_call_and_schedules_a_copy():
-    repository = FakeCallsRepository(saved={"nueva_llamada_id": 99, "promesa_id": None})
-    response = make_service(repository).register_call(
+    repository = FakeCallsRepository()
+    make_service(repository).register_call(
         body(resultado="volver a llamar", fecha_seguimiento="2026-10-20")
     )
 
@@ -91,14 +90,21 @@ def test_call_back_completes_call_and_schedules_a_copy():
         "proposito": "seguimiento",
         "fecha_agendada": datetime(2026, 10, 20),
     }
-    assert response["nueva_llamada_id"] == 99
+
+
+def promise_body(**overrides):
+    return body(
+        resultado="promesa de donativo",
+        monto_comprometido=1250.5,
+        notas="ok",
+        fecha_seguimiento="2026-11-03",
+        **overrides,
+    )
 
 
 def test_promise_creates_a_single_payment_promise_for_the_user():
-    repository = FakeCallsRepository(saved={"nueva_llamada_id": None, "promesa_id": 50})
-    response = make_service(repository).register_call(
-        body(resultado="promesa de donativo", monto_comprometido=1250.5, notas="ok")
-    )
+    repository = FakeCallsRepository()
+    make_service(repository).register_call(promise_body())
 
     _, update, _, new_promise = repository.registered
     assert update["estado"] == "completada"
@@ -110,22 +116,40 @@ def test_promise_creates_a_single_payment_promise_for_the_user():
     assert new_promise["state"] == "activo"
     assert new_promise["numero_frequencia"] == 1
     assert new_promise["tipo_frquencia"] == "unica"
-    assert response["promesa_id"] == 50
+
+
+def test_promise_schedules_a_call_linked_to_the_new_promise():
+    repository = FakeCallsRepository()
+    make_service(repository).register_call(promise_body())
+
+    _, update, new_call, _ = repository.registered
+    assert update["fecha_agendada"] is None
+    assert new_call == {
+        # None = el repositorio usa el id de la promesa recien creada.
+        "promesa_id": None,
+        "resultado_llamado": "pendiente",
+        "monto_comprometido": Decimal("1250.5"),
+        "estado": "agendada",
+        "proposito": "seguimiento",
+        "fecha_agendada": datetime(2026, 11, 3),
+    }
 
 
 @pytest.mark.parametrize(
-    "extra",
-    [{"notas": "ok"}, {"monto_comprometido": 100}, {}],
+    "missing",
+    ["notas", "monto_comprometido", "fecha_seguimiento"],
 )
-def test_promise_requires_amount_and_notes(extra):
+def test_promise_requires_amount_notes_and_date(missing):
+    data = promise_body()
+    del data[missing]
     with pytest.raises(HttpException) as error:
-        make_service(FakeCallsRepository()).register_call(
-            body(resultado="promesa de donativo", **extra)
-        )
+        make_service(FakeCallsRepository()).register_call(data)
     assert error.value.status == 400
 
 
-@pytest.mark.parametrize("result", ["volver a llamar", "no contestó"])
+@pytest.mark.parametrize(
+    "result", ["promesa de donativo", "volver a llamar", "no contestó"]
+)
 def test_follow_up_results_require_a_date(result):
     with pytest.raises(HttpException) as error:
         make_service(FakeCallsRepository()).register_call(body(resultado=result))
@@ -154,6 +178,13 @@ def test_already_registered_call_returns_409():
         make_service(repository).register_call(body(resultado="rechazó"))
     assert error.value.status == 409
     assert repository.registered is None
+
+
+def test_call_registered_concurrently_returns_409():
+    repository = FakeCallsRepository(saved=False)
+    with pytest.raises(HttpException) as error:
+        make_service(repository).register_call(body(resultado="rechazó"))
+    assert error.value.status == 409
 
 
 def test_database_error_returns_500():

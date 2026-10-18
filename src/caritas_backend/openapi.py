@@ -138,22 +138,17 @@ REGISTER_CALL_REQUEST_SCHEMA = {
         "fecha_seguimiento": {
             "type": "string",
             "format": "date-time",
-            "description": "Obligatoria para 'volver a llamar' y 'no contestó'.",
+            "description": (
+                "Obligatoria para 'promesa de donativo', 'volver a llamar' y "
+                "'no contestó'."
+            ),
         },
     },
 }
 
 REGISTER_CALL_RESPONSE_SCHEMA = {
     "type": "object",
-    "properties": {
-        "llamada_id": {"type": "integer"},
-        "estado": {"type": "string", "enum": ["agendada", "completada"]},
-        "resultado": {"type": "string"},
-        "notas": {"type": "string", "nullable": True},
-        "fecha_agendada": {"type": "string", "format": "date-time", "nullable": True},
-        "nueva_llamada_id": {"type": "integer", "nullable": True},
-        "promesa_id": {"type": "integer", "nullable": True},
-    },
+    "properties": {"message": {"type": "string", "enum": ["ok"]}},
 }
 
 REGISTER_CALL_RESPONSE_REF = "#/components/schemas/RegisterCallResponse"
@@ -432,7 +427,8 @@ def build_spec() -> dict:
                         "fecha_seguimiento. Los demas resultados la marcan como "
                         "completada. 'volver a llamar' agenda una llamada nueva en "
                         "fecha_seguimiento y 'promesa de donativo' crea una promesa "
-                        "unica por monto_comprometido."
+                        "unica por monto_comprometido y agenda una llamada nueva "
+                        "en fecha_seguimiento ligada a esa promesa."
                     ),
                     "requestBody": {
                         "required": True,

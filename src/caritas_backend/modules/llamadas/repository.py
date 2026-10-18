@@ -101,9 +101,9 @@ class CallsRepository:
         update: dict,
         new_call: dict | None,
         new_promise: dict | None,
-    ) -> dict | None:
-        """Aplica todo en una sola transaccion; None si la llamada ya no estaba
-        agendada."""
+    ) -> bool:
+        """Aplica todo en una sola transaccion; False si la llamada ya no estaba
+        agendada. Si new_call no trae promesa_id, se liga a new_promise."""
         with self._database.connection() as connection:
             cursor = connection.cursor(as_dict=True)
             try:
@@ -120,22 +120,9 @@ class CallsRepository:
                 )
                 if cursor.rowcount == 0:
                     connection.rollback()
-                    return None
+                    return False
 
-                saved = {"nueva_llamada_id": None, "promesa_id": None}
-                if new_call is not None:
-                    cursor.execute(
-                        INSERT_CALL_QUERY,
-                        (
-                            new_call["promesa_id"],
-                            new_call["resultado_llamado"],
-                            new_call["monto_comprometido"],
-                            new_call["estado"],
-                            new_call["proposito"],
-                            new_call["fecha_agendada"],
-                        ),
-                    )
-                    saved["nueva_llamada_id"] = cursor.fetchone()["id"]
+                promise_id = None
                 if new_promise is not None:
                     cursor.execute(
                         INSERT_PROMISE_QUERY,
@@ -150,9 +137,21 @@ class CallsRepository:
                             new_promise["tipo_frquencia"],
                         ),
                     )
-                    saved["promesa_id"] = cursor.fetchone()["id"]
+                    promise_id = cursor.fetchone()["id"]
+                if new_call is not None:
+                    cursor.execute(
+                        INSERT_CALL_QUERY,
+                        (
+                            new_call["promesa_id"] or promise_id,
+                            new_call["resultado_llamado"],
+                            new_call["monto_comprometido"],
+                            new_call["estado"],
+                            new_call["proposito"],
+                            new_call["fecha_agendada"],
+                        ),
+                    )
 
                 connection.commit()
-                return saved
+                return True
             finally:
                 cursor.close()

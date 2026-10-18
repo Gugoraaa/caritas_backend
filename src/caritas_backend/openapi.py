@@ -466,6 +466,109 @@ COLLECTION_PATHS = {
 }
 
 
+ADMIN_SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "period": {
+            "type": "object",
+            "properties": {
+                "start": {"type": "string", "format": "date"},
+                "end": {"type": "string", "format": "date"},
+            },
+        },
+        "fundraising": {
+            "type": "object",
+            "properties": {
+                "total": DECIMAL,
+                "weekly_totals": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "start": {"type": "string", "format": "date"},
+                            "end": {"type": "string", "format": "date"},
+                            "total": DECIMAL,
+                        },
+                    },
+                },
+            },
+        },
+        "call_outcomes": {
+            "type": "array",
+            "description": "Conteos historicos; no hay fecha de finalizacion de llamada",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "outcome": {"type": "string"},
+                    "call_count": {"type": "integer"},
+                },
+            },
+        },
+        "calls_by_responsible": {
+            "type": "array",
+            "description": "Llamadas completadas historicas por responsable",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "integer"},
+                    "user_name": {"type": "string"},
+                    "call_count": {"type": "integer"},
+                    "promise_count": {"type": "integer"},
+                },
+            },
+        },
+        "donor_risk": {
+            "type": "object",
+            "properties": {
+                color: {"type": "integer"} for color in ("green", "yellow", "red")
+            },
+        },
+    },
+}
+
+ADMIN_CALL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "call_id": {"type": "integer"},
+        "donor_id": {"type": "integer"},
+        "donor_full_name": {"type": "string"},
+        "user_id": {"type": "integer", "nullable": True},
+        "user_name": {"type": "string", "nullable": True},
+        "result": {"type": "string"},
+        "call_status": {"type": "string"},
+        "scheduled_date": {**LOCAL_DATE_TIME, "nullable": True},
+    },
+}
+
+ADMIN_USER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": "string"},
+        "role": {"type": "string"},
+    },
+}
+
+
+def admin_ipad_get(summary: str, schema: dict, parameters: list | None = None) -> dict:
+    operation = {
+        "tags": ["admin"],
+        "summary": summary,
+        "security": BEARER,
+        "responses": {
+            "200": {
+                "description": summary,
+                "content": {"application/json": {"schema": schema}},
+            },
+            **{str(code): ERROR_RESPONSES[str(code)] for code in (401, 403, 500)},
+        },
+    }
+    if parameters:
+        operation["parameters"] = parameters
+        operation["responses"]["400"] = ERROR_RESPONSES["400"]
+    return {"get": operation}
+
+
 def build_spec() -> dict:
     return {
         "openapi": "3.0.3",
@@ -490,6 +593,9 @@ def build_spec() -> dict:
                 "CallResult": CALL_RESULT_SCHEMA,
                 "DonorDetail": DONOR_DETAIL_SCHEMA,
                 "AdminDonor": ADMIN_DONOR_SCHEMA,
+                "AdminSummary": ADMIN_SUMMARY_SCHEMA,
+                "AdminCall": ADMIN_CALL_SCHEMA,
+                "AdminUser": ADMIN_USER_SCHEMA,
                 "ScheduledCall": SCHEDULED_CALL_SCHEMA,
                 "HistoryDonor": HISTORY_DONOR_SCHEMA,
                 "HistoryItem": HISTORY_ITEM_SCHEMA,
@@ -497,7 +603,7 @@ def build_spec() -> dict:
                 "RegisterCallResponse": REGISTER_CALL_RESPONSE_SCHEMA,
                 "Collection": COLLECTION_SCHEMA,
                 "CollectionReason": COLLECTION_REASON_SCHEMA,
-            }
+            },
         },
         "paths": {
             **COLLECTION_PATHS,
@@ -711,6 +817,26 @@ def build_spec() -> dict:
                     },
                 }
             },
+            "/admin/summary": admin_ipad_get(
+                "Resumen de recaudacion mensual, llamadas historicas y riesgo",
+                {"$ref": "#/components/schemas/AdminSummary"},
+            ),
+            "/admin/calls": admin_ipad_get(
+                "Llamadas para administracion",
+                {"type": "array", "items": {"$ref": "#/components/schemas/AdminCall"}},
+                [
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "integer"},
+                    }
+                ],
+            ),
+            "/admin/users": admin_ipad_get(
+                "Usuarios y roles",
+                {"type": "array", "items": {"$ref": "#/components/schemas/AdminUser"}},
+            ),
             "/admin/donors": {
                 "get": {
                     "tags": ["admin"],
@@ -788,9 +914,7 @@ def build_spec() -> dict:
                         "las telemarketinas vean el semaforo de los donantes y su progreso con "
                         "las llamadas."
                     ),
-                    "parameters": [
-                        USER_ID_PARAM
-                    ],
+                    "parameters": [USER_ID_PARAM],
                     "responses": {
                         "200": {
                             "description": "Scheduled calls",
@@ -950,9 +1074,7 @@ def build_spec() -> dict:
                     "tags": ["history"],
                     "security": OPTIONAL_BEARER,
                     "summary": "Donors that appear in a user's history",
-                    "parameters": [
-                        USER_ID_PARAM
-                    ],
+                    "parameters": [USER_ID_PARAM],
                     "responses": {
                         "200": {
                             "description": "History donors",

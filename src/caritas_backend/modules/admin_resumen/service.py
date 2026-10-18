@@ -1,5 +1,6 @@
 import logging
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from ...database import Database
@@ -42,7 +43,7 @@ class AdminResumenService:
                     for day, amount in daily_by_date.items()
                     if left <= day < right
                 ),
-                start=0,
+                start=Decimal("0.00"),
             )
             weeks.append(
                 {
@@ -57,7 +58,9 @@ class AdminResumenService:
         risk = {"green": 0, "yellow": 0, "red": 0}
         for row in latest:
             donated = row["latest_donation"]
-            days = (today - as_date(donated)).days if donated is not None else None
+            days = (
+                max((today - as_date(donated)).days, 0) if donated is not None else None
+            )
             risk[
                 "green"
                 if days is not None and days < 30
@@ -71,7 +74,7 @@ class AdminResumenService:
                 "end": (following - timedelta(days=1)).isoformat(),
             },
             "fundraising": {
-                "total": sum(daily_by_date.values(), start=0),
+                "total": sum(daily_by_date.values(), start=Decimal("0.00")),
                 "weekly_totals": weeks,
             },
             "call_outcomes": outcomes,

@@ -24,9 +24,10 @@ class AdminResumenRepository:
 
     def outcomes(self) -> list[dict]:
         return self._fetch(
-            "SELECT l.resultado_llamado AS outcome, COUNT(*) AS call_count "
-            "FROM Llamadas l WHERE l.estado = %s "
-            "GROUP BY l.resultado_llamado ORDER BY l.resultado_llamado;",
+            "SELECT CONVERT(nvarchar(255), l.resultado_llamado) AS outcome, "
+            "COUNT(*) AS call_count FROM Llamadas l WHERE l.estado = %s "
+            "GROUP BY CONVERT(nvarchar(255), l.resultado_llamado) "
+            "ORDER BY outcome;",
             ("completada",),
         )
 

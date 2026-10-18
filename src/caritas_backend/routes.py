@@ -2,6 +2,9 @@ from flask import Flask, jsonify
 from flask_swagger_ui import get_swaggerui_blueprint
 
 from .modules.admin.controller import blueprint as admin_blueprint
+from .modules.admin_llamadas.controller import blueprint as admin_calls_blueprint
+from .modules.admin_resumen.controller import blueprint as admin_resumen_blueprint
+from .modules.admin_usuarios.controller import blueprint as admin_users_blueprint
 from .modules.app.controller import blueprint as app_blueprint
 from .modules.auth.controller import blueprint as auth_blueprint
 from .modules.causas.controller import blueprint as causas_blueprint
@@ -17,6 +20,9 @@ OPENAPI_JSON_URL = "/docs/openapi.json"
 def register_routes(app: Flask) -> None:
     app.register_blueprint(app_blueprint)
     app.register_blueprint(admin_blueprint)
+    app.register_blueprint(admin_calls_blueprint)
+    app.register_blueprint(admin_resumen_blueprint)
+    app.register_blueprint(admin_users_blueprint)
     app.register_blueprint(auth_blueprint)
     app.register_blueprint(calls_blueprint)
     app.register_blueprint(causas_blueprint)

@@ -2,12 +2,7 @@ from ...database import Database
 
 AdminCallRow = dict
 
-# Vista admin de Llamadas: sin filtro por responsable, a diferencia de
-# GET /calls/scheduled. Mismos estados visibles que ese endpoint.
-#
-# fecha_agendada es la fecha AGENDADA de la llamada, no la hora real en que se
-# registro: la tabla no guarda timestamp de completado, asi que no se expone
-# ninguna "duracion" ni fecha de registro inventada.
+# fecha_agendada es la cita, no la hora real de la llamada.
 CALLS_QUERY = """SELECT
                      l.id AS call_id,
                      d.id AS donor_id,
@@ -33,7 +28,6 @@ class AdminCallsRepository:
         query = CALLS_QUERY
         params: list = []
 
-        # Filtro opcional por responsable.
         if user_id is not None:
             query += " AND p.responsable_id = %s"
             params.append(user_id)

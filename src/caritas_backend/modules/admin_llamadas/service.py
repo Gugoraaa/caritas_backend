@@ -23,7 +23,6 @@ class AdminCallsService:
 
 
 def to_public_call(row: AdminCallRow) -> dict:
-    # La DB no guarda fecha real de registro ni duracion: solo lo agendado.
     scheduled = row["scheduled_date"]
     return {
         "call_id": row["call_id"],

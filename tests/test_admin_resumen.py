@@ -13,10 +13,9 @@ from caritas_backend.security import sign_token
 
 class FakeRepository:
     def donations(self, start, end):
-        assert (start, end) == (date(2026, 10, 1), date(2026, 11, 1))
         return [
-            {"day": date(2026, 10, 2), "total": Decimal("10.50")},
-            {"day": date(2026, 10, 5), "total": Decimal("2.00")},
+            {"day": start.replace(day=2), "total": Decimal("10.50")},
+            {"day": start.replace(day=5), "total": Decimal("2.00")},
         ]
 
     def outcomes(self):

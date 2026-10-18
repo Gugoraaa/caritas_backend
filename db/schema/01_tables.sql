@@ -94,8 +94,11 @@ CREATE TABLE dbo.Abonos (
     promesa_id int NOT NULL,
     monto decimal(14,2) NOT NULL,
     fecha_deposito datetime2 NOT NULL,
+    -- db/manual/2026-10-17_abonos_metodo_pago.sql (PENDIENTE en produccion).
+    metodo_pago nvarchar(20) NULL,
     CONSTRAINT abonos_id_primary PRIMARY KEY (id),
-    CONSTRAINT abonos_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id)
+    CONSTRAINT abonos_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id),
+    CONSTRAINT abonos_metodo_pago_check CHECK (metodo_pago IN (N'efectivo', N'spei'))
 );
 CREATE INDEX abonos_promesa_id_fecha_deposito_index ON dbo.Abonos (promesa_id, fecha_deposito);
 

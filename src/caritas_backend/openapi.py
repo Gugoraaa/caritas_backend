@@ -320,6 +320,156 @@ ERROR_RESPONSES = {
     }.items()
 }
 
+COLLECTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "promise_id": {"type": "integer"},
+        "donor_id": {"type": "integer"},
+        "name": {"type": "string"},
+        "last_name": {"type": "string", "nullable": True},
+        "mother_last_name": {"type": "string", "nullable": True},
+        "phone": {"type": "string", "nullable": True},
+        "address": {"type": "string", "nullable": True},
+        "interior_number": {"type": "string", "nullable": True},
+        "address_notes": {"type": "string", "nullable": True},
+        "scheduled_at": {"type": "string", "format": "date-time"},
+        "window_start": {"type": "string", "format": "date-time", "nullable": True},
+        "window_end": {"type": "string", "format": "date-time", "nullable": True},
+        "amount": {"type": "string", "example": "300.00"},
+        "status": {
+            "type": "string",
+            "enum": ["pendiente", "confirmada", "no_recolectada"],
+        },
+        "reason": {"type": "string", "nullable": True},
+        "reason_label": {"type": "string", "nullable": True},
+        "resolved_at": {"type": "string", "format": "date-time", "nullable": True},
+        "abono_id": {"type": "integer", "nullable": True},
+    },
+}
+
+COLLECTION_REASON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "code": {"type": "string"},
+        "label": {"type": "string"},
+    },
+}
+
+COLLECTION_REF = "#/components/schemas/Collection"
+COLLECTION_ID_PARAM = {
+    "name": "collection_id",
+    "in": "path",
+    "required": True,
+    "schema": {"type": "integer"},
+}
+NOT_COLLECTED_REASON_CODES = [
+    "nadie_en_domicilio",
+    "reprogramar",
+    "domicilio_incorrecto",
+    "ya_no_desea_donar",
+]
+
+
+def _collection_response(description: str) -> dict:
+    return {
+        "description": description,
+        "content": {"application/json": {"schema": {"$ref": COLLECTION_REF}}},
+    }
+
+
+COLLECTION_PATHS = {
+    "/collections/reasons": {
+        "get": {
+            "tags": ["collections"],
+            "summary": "Motivos de no recoleccion",
+            "responses": {
+                "200": {
+                    "description": "Catalogo de motivos",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/CollectionReason"
+                                },
+                            }
+                        }
+                    },
+                }
+            },
+        }
+    },
+    "/collections/{collection_id}": {
+        "get": {
+            "tags": ["collections"],
+            "summary": "Detalle de una recoleccion",
+            "description": "Pantalla 'Detalle de la recoleccion' del recolector.",
+            "security": BEARER,
+            "parameters": [COLLECTION_ID_PARAM],
+            "responses": {
+                "200": _collection_response("Detalle de la recoleccion"),
+                "401": ERROR_RESPONSES["401"],
+                "404": ERROR_RESPONSES["404"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        }
+    },
+    "/collections/{collection_id}/confirm": {
+        "post": {
+            "tags": ["collections"],
+            "summary": "Confirma la recoleccion y registra el abono",
+            "description": (
+                "Marca la recoleccion como confirmada y crea un Abono en efectivo "
+                "por su monto, en una sola transaccion. Solo si esta pendiente."
+            ),
+            "security": BEARER,
+            "parameters": [COLLECTION_ID_PARAM],
+            "responses": {
+                "200": _collection_response("Recoleccion confirmada"),
+                "401": ERROR_RESPONSES["401"],
+                "404": ERROR_RESPONSES["404"],
+                "409": ERROR_RESPONSES["409"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        }
+    },
+    "/collections/{collection_id}/not-collected": {
+        "post": {
+            "tags": ["collections"],
+            "summary": "Registra el motivo de no recoleccion",
+            "description": "Solo si la recoleccion esta pendiente.",
+            "security": BEARER,
+            "parameters": [COLLECTION_ID_PARAM],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["reason"],
+                            "properties": {
+                                "reason": {
+                                    "type": "string",
+                                    "enum": NOT_COLLECTED_REASON_CODES,
+                                }
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": _collection_response("Motivo registrado"),
+                "400": ERROR_RESPONSES["400"],
+                "401": ERROR_RESPONSES["401"],
+                "404": ERROR_RESPONSES["404"],
+                "409": ERROR_RESPONSES["409"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        }
+    },
+}
+
 
 def build_spec() -> dict:
     return {
@@ -350,9 +500,12 @@ def build_spec() -> dict:
                 "HistoryItem": HISTORY_ITEM_SCHEMA,
                 "RegisterCallRequest": REGISTER_CALL_REQUEST_SCHEMA,
                 "RegisterCallResponse": REGISTER_CALL_RESPONSE_SCHEMA,
+                "Collection": COLLECTION_SCHEMA,
+                "CollectionReason": COLLECTION_REASON_SCHEMA,
             }
         },
         "paths": {
+            **COLLECTION_PATHS,
             "/login": {
                 "post": {
                     "tags": ["auth"],

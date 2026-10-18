@@ -130,3 +130,30 @@ CREATE TABLE dbo.Llamadas (
     CONSTRAINT llamadas_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id)
 );
 CREATE INDEX llamadas_promesa_id_index ON dbo.Llamadas (promesa_id);
+
+-- db/manual/2026-10-17_recolecciones.sql (PENDIENTE en produccion).
+CREATE TABLE dbo.Recolecciones (
+    id int NOT NULL IDENTITY(1,1),
+    promesa_id int NOT NULL,
+    recolector_id int NULL,
+    fecha_programada datetime2 NOT NULL,
+    ventana_inicio datetime2 NULL,
+    ventana_fin datetime2 NULL,
+    monto decimal(14,2) NOT NULL,
+    notas_domicilio nvarchar(500) NULL,
+    estado nvarchar(20) DEFAULT (N'pendiente') NOT NULL,
+    motivo nvarchar(30) NULL,
+    fecha_resultado datetime2 NULL,
+    abono_id int NULL,
+    created_at datetime2 DEFAULT (getdate()) NOT NULL,
+    CONSTRAINT recolecciones_id_primary PRIMARY KEY (id),
+    CONSTRAINT recolecciones_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id),
+    CONSTRAINT recolecciones_recolector_id_foreign FOREIGN KEY (recolector_id) REFERENCES dbo.Users(id),
+    CONSTRAINT recolecciones_abono_id_foreign FOREIGN KEY (abono_id) REFERENCES dbo.Abonos(id),
+    CONSTRAINT recolecciones_estado_check CHECK (estado IN (N'pendiente', N'confirmada', N'no_recolectada')),
+    CONSTRAINT recolecciones_motivo_check CHECK (motivo IN (
+        N'nadie_en_domicilio', N'reprogramar', N'domicilio_incorrecto', N'ya_no_desea_donar'
+    ))
+);
+CREATE INDEX recolecciones_promesa_id_index ON dbo.Recolecciones (promesa_id);
+CREATE INDEX recolecciones_recolector_fecha_index ON dbo.Recolecciones (recolector_id, fecha_programada);

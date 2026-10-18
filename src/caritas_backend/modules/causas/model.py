@@ -14,3 +14,11 @@ class CausaRecord(TypedDict):
     responsable: str | None
     lugar: str | None
     fecha_fin: datetime | None
+    monto_recaudado: Decimal
+
+
+class Causa(CausaRecord):
+    """Lo que devuelve la API: la fila mas las etiquetas derivadas del titulo."""
+
+    clave: str
+    nombre_corto: str

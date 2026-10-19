@@ -1,14 +1,20 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
+from flask import Flask
 
-from caritas_backend.errors import HttpException
+from caritas_backend.errors import HttpException, register_error_handlers
+from caritas_backend.modules.auth.service import AuthService
+from caritas_backend.modules.recolecciones.controller import blueprint
 from caritas_backend.modules.recolecciones.service import (
     CollectionsService,
     format_address,
     get_reasons,
 )
+from caritas_backend.security import sign_token
+
+SECRET = "test-secret"
 
 ROW = {
     "id": 5,
@@ -35,6 +41,16 @@ ROW = {
     "municipio": "Monterrey",
 }
 
+HISTORY_ROW = {
+    "id": 5,
+    "estado": "confirmada",
+    "updated_at": datetime(2026, 10, 18, 10, 55),
+    "monto_recolectado": Decimal("300.00"),
+    "nombre": "Guadalupe",
+    "apellido_paterno": "Sánchez",
+    "apellido_materno": "Cavazos",
+}
+
 
 class FakeCollectionsRepository:
     def __init__(self, row=ROW, error=None, abono_id=99, updated=True):
@@ -44,6 +60,12 @@ class FakeCollectionsRepository:
         self.updated = updated
         self.confirmed = None
         self.not_collected = None
+
+    def find_history(self, user_id, since, until):
+        if self.error:
+            raise self.error
+        self.history_args = (user_id, since, until)
+        return [HISTORY_ROW]
 
     def find(self, collection_id):
         if self.error:
@@ -89,6 +111,93 @@ def test_collection_detail():
         "resolved_at": None,
         "abono_id": None,
     }
+
+
+def test_history_items():
+    repository = FakeCollectionsRepository()
+
+    history = make_service(repository).get_history(7, None, None)
+
+    assert repository.history_args == (7, None, None)
+    assert history == [
+        {
+            "id": 5,
+            "name": "Guadalupe",
+            "last_name": "Sánchez",
+            "mother_last_name": "Cavazos",
+            "date": "2026-10-18T10:55:00",
+            "status": "confirmada",
+            "amount": Decimal("300.00"),
+        }
+    ]
+
+
+def test_history_dates_are_inclusive_days():
+    repository = FakeCollectionsRepository()
+
+    make_service(repository).get_history(7, date(2026, 10, 1), date(2026, 10, 18))
+
+    assert repository.history_args == (
+        7,
+        datetime(2026, 10, 1),
+        datetime(2026, 10, 19),
+    )
+
+
+def test_history_rejects_inverted_range():
+    with pytest.raises(HttpException) as error:
+        make_service(FakeCollectionsRepository()).get_history(
+            7, date(2026, 10, 18), date(2026, 10, 1)
+        )
+    assert error.value.status == 400
+
+
+def test_history_database_error_becomes_500():
+    service = make_service(FakeCollectionsRepository(error=RuntimeError("db down")))
+    with pytest.raises(HttpException) as error:
+        service.get_history(7, None, None)
+    assert error.value.status == 500
+
+
+@pytest.fixture
+def client():
+    repository = FakeCollectionsRepository()
+    app = Flask(__name__)
+    app.extensions["auth"] = AuthService(None, SECRET, 3600)
+    app.extensions["collections"] = make_service(repository)
+    register_error_handlers(app)
+    app.register_blueprint(blueprint)
+    client = app.test_client()
+    client.repository = repository
+    return client
+
+
+def bearer(user_id):
+    token = sign_token({"userId": user_id, "role": "recolector"}, SECRET, 3600)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_history_endpoint_uses_token_user_and_dates(client):
+    response = client.get(
+        "/collections/history?from=2026-10-01&to=2026-10-18", headers=bearer(7)
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()[0]["amount"] == "300.00"
+    assert client.repository.history_args == (
+        7,
+        datetime(2026, 10, 1),
+        datetime(2026, 10, 19),
+    )
+
+
+def test_history_endpoint_rejects_bad_date(client):
+    response = client.get("/collections/history?from=18/10/2026", headers=bearer(7))
+    assert response.status_code == 400
+
+
+def test_history_endpoint_without_token_is_401(client):
+    assert client.get("/collections/history").status_code == 401
 
 
 def test_confirm_creates_abono_for_the_collection_amount():

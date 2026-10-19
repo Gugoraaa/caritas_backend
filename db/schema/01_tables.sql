@@ -89,22 +89,6 @@ CREATE INDEX promesas_caso_id_index ON dbo.Promesas (caso_id);
 CREATE INDEX promesas_donante_id_index ON dbo.Promesas (donante_id);
 CREATE INDEX promesas_responsable_id_index ON dbo.Promesas (responsable_id);
 
-CREATE TABLE "Llamadas"(
-    "id" INT NOT NULL,
-    "promesa_id" INT NOT NULL,
-    "resultado_llamado" TEXT NOT NULL,
-    "monto_comprometido" DECIMAL(14, 2) NULL,
-    "estado" NVARCHAR(20) CHECK
-        (
-            "estado" IN(
-                N'agendada',
-                N'cancelada',
-                N'completada'
-            )
-        ) NOT NULL,
-    "proposito" NVARCHAR(30) NULL,
-    "fecha_agendada" DATETIME2 NULL,
-    "notas_llamada" NVARCHAR(MAX) NULL
 CREATE TABLE dbo.Abonos (
     id int NOT NULL,
     promesa_id int NOT NULL,
@@ -126,6 +110,8 @@ CREATE TABLE dbo.Llamadas (
     proposito nvarchar(30) NULL,
     promesa_id int NOT NULL,
     fecha_agendada datetime2 NULL,
+    -- db/manual/2026-10-18_llamadas_notas.sql.
+    notas_llamada nvarchar(MAX) NULL,
     CONSTRAINT llamadas_id_primary PRIMARY KEY (id),
     CONSTRAINT llamadas_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id)
 );
@@ -146,6 +132,7 @@ CREATE TABLE dbo.Recolecciones (
     fecha_resultado datetime2 NULL,
     abono_id int NULL,
     created_at datetime2 DEFAULT (getdate()) NOT NULL,
+    updated_at datetime2 DEFAULT (getdate()) NOT NULL,
     CONSTRAINT recolecciones_id_primary PRIMARY KEY (id),
     CONSTRAINT recolecciones_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id),
     CONSTRAINT recolecciones_recolector_id_foreign FOREIGN KEY (recolector_id) REFERENCES dbo.Users(id),
@@ -157,3 +144,22 @@ CREATE TABLE dbo.Recolecciones (
 );
 CREATE INDEX recolecciones_promesa_id_index ON dbo.Recolecciones (promesa_id);
 CREATE INDEX recolecciones_recolector_fecha_index ON dbo.Recolecciones (recolector_id, fecha_programada);
+GO
+
+/* updated_at: se actualiza solo cuando estado cambia de valor. CREATE TRIGGER
+   tiene que ser lo primero del lote, por eso va entre GO. */
+CREATE OR ALTER TRIGGER dbo.trg_Recolecciones_estado_updated_at
+ON dbo.Recolecciones
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF UPDATE(estado)
+        UPDATE r
+        SET updated_at = getdate()
+        FROM dbo.Recolecciones r
+        INNER JOIN inserted i ON i.id = r.id
+        INNER JOIN deleted d ON d.id = i.id
+        WHERE i.estado <> d.estado;
+END;
+GO

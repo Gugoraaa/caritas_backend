@@ -343,6 +343,25 @@ COLLECTION_SCHEMA = {
     },
 }
 
+COLLECTION_HISTORY_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": "string"},
+        "last_name": {"type": "string", "nullable": True},
+        "mother_last_name": {"type": "string", "nullable": True},
+        "date": {
+            **LOCAL_DATE_TIME,
+            "description": "updated_at: ultimo cambio de estado de la recoleccion",
+        },
+        "status": {"type": "string", "enum": ["confirmada", "no_recolectada"]},
+        "amount": {
+            **DECIMAL,
+            "description": "Monto del abono creado; 0.00 si no se recolecto",
+        },
+    },
+}
+
 COLLECTION_REASON_SCHEMA = {
     "type": "object",
     "properties": {
@@ -392,6 +411,46 @@ COLLECTION_PATHS = {
                         }
                     },
                 }
+            },
+        }
+    },
+    "/collections/history": {
+        "get": {
+            "tags": ["collections"],
+            "summary": "Historial de recolecciones del usuario",
+            "description": (
+                "Recolecciones ya resueltas (confirmadas o no recolectadas) por el "
+                "recolector del token, de la mas reciente a la mas vieja. from/to "
+                "filtran por updated_at y son dias inclusivos."
+            ),
+            "security": BEARER,
+            "parameters": [
+                {
+                    "name": name,
+                    "in": "query",
+                    "required": False,
+                    "schema": {"type": "string", "format": "date"},
+                    "example": example,
+                }
+                for name, example in (("from", "2026-10-01"), ("to", "2026-10-18"))
+            ],
+            "responses": {
+                "200": {
+                    "description": "Recolecciones del historial",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/CollectionHistoryItem"
+                                },
+                            }
+                        }
+                    },
+                },
+                "400": ERROR_RESPONSES["400"],
+                "401": ERROR_RESPONSES["401"],
+                "500": ERROR_RESPONSES["500"],
             },
         }
     },
@@ -639,6 +698,7 @@ def build_spec() -> dict:
                 "RegisterCallRequest": REGISTER_CALL_REQUEST_SCHEMA,
                 "RegisterCallResponse": REGISTER_CALL_RESPONSE_SCHEMA,
                 "Collection": COLLECTION_SCHEMA,
+                "CollectionHistoryItem": COLLECTION_HISTORY_ITEM_SCHEMA,
                 "CollectionReason": COLLECTION_REASON_SCHEMA,
             },
         },

@@ -569,6 +569,43 @@ def admin_ipad_get(summary: str, schema: dict, parameters: list | None = None) -
     return {"get": operation}
 
 
+HEALTH_PATHS = {
+    "/health": {
+        "get": {
+            "tags": ["health"],
+            "summary": "Estado y version de la API",
+            "description": (
+                "version se cambia a mano en cada despliegue "
+                "(modules/health/controller.py). database dice si la API alcanza "
+                "la base de datos."
+            ),
+            "responses": {
+                "200": {
+                    "description": "API arriba",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "status": {"type": "string", "example": "ok"},
+                                    "version": {
+                                        "type": "string",
+                                        "example": "2026.10.18",
+                                    },
+                                    "database": {
+                                        "type": "string",
+                                        "enum": ["ok", "error"],
+                                    },
+                                },
+                            }
+                        }
+                    },
+                }
+            },
+        }
+    },
+}
+
 def build_spec() -> dict:
     return {
         "openapi": "3.0.3",
@@ -607,6 +644,7 @@ def build_spec() -> dict:
         },
         "paths": {
             **COLLECTION_PATHS,
+            **HEALTH_PATHS,
             "/login": {
                 "post": {
                     "tags": ["auth"],

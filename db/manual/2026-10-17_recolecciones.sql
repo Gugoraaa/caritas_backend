@@ -9,6 +9,8 @@
    - Al confirmar se crea el Abono (metodo_pago = 'efectivo') y se guarda su id
      en abono_id. Requiere 2026-10-17_abonos_metodo_pago.sql.
    - id es IDENTITY (como Users) para no depender de MAX(id) + 1.
+   - updated_at se actualiza automaticamente (trigger) solo cuando cambia
+     estado. created_at queda fijo.
 
    Idempotente: se puede correr varias veces. No toca ninguna tabla existente.
 
@@ -38,6 +40,7 @@ IF OBJECT_ID(N'dbo.Recolecciones', N'U') IS NULL
         fecha_resultado datetime2 NULL,
         abono_id int NULL,
         created_at datetime2 DEFAULT (getdate()) NOT NULL,
+        updated_at datetime2 DEFAULT (getdate()) NOT NULL,
         CONSTRAINT recolecciones_id_primary PRIMARY KEY (id),
         CONSTRAINT recolecciones_promesa_id_foreign FOREIGN KEY (promesa_id) REFERENCES dbo.Promesas(id),
         CONSTRAINT recolecciones_recolector_id_foreign FOREIGN KEY (recolector_id) REFERENCES dbo.Users(id),
@@ -56,4 +59,21 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'recolecciones_recolector_fecha_index')
     CREATE INDEX recolecciones_recolector_fecha_index
         ON dbo.Recolecciones (recolector_id, fecha_programada);
+GO
+
+/* updated_at: se actualiza solo cuando estado cambia de valor. */
+CREATE OR ALTER TRIGGER dbo.trg_Recolecciones_estado_updated_at
+ON dbo.Recolecciones
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF UPDATE(estado)
+        UPDATE r
+        SET updated_at = getdate()
+        FROM dbo.Recolecciones r
+        INNER JOIN inserted i ON i.id = r.id
+        INNER JOIN deleted d ON d.id = i.id
+        WHERE i.estado <> d.estado;
+END;
 GO

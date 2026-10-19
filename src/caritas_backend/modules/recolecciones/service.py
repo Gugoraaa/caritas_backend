@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from ...database import Database
@@ -9,6 +9,7 @@ from .repository import CollectionRow, CollectionsRepository
 INTERNAL_ERROR = "Internal server error"
 NOT_FOUND = "Collection not found"
 NOT_PENDING = "Collection is not pending; it was already resolved"
+INVALID_RANGE = "from must be on or before to"
 
 STATUS_PENDING = "pendiente"
 STATUS_CONFIRMED = "confirmada"
@@ -33,6 +34,22 @@ class CollectionsService:
 
     def get_collection(self, collection_id: int) -> dict:
         return to_public_collection(self._find(collection_id))
+
+    def get_history(
+        self, user_id: int, date_from: date | None, date_to: date | None
+    ) -> list[dict]:
+        """Recolecciones resueltas por el usuario; las fechas son dias inclusivos."""
+        if date_from and date_to and date_from > date_to:
+            raise HttpException(400, INVALID_RANGE)
+
+        since = datetime.combine(date_from, time.min) if date_from else None
+        until = datetime.combine(date_to + timedelta(days=1), time.min) if date_to else None
+        try:
+            rows = self.collections.find_history(user_id, since, until)
+        except Exception as error:
+            log.exception("Failed to fetch collection history")
+            raise HttpException(500, INTERNAL_ERROR) from error
+        return [to_public_history_item(row) for row in rows]
 
     def confirm(self, collection_id: int, user_id: int) -> dict:
         row = self._find_pending(collection_id)
@@ -134,6 +151,18 @@ def to_public_collection(row: CollectionRow) -> dict:
         "reason_label": NOT_COLLECTED_REASONS.get(reason) if reason else None,
         "resolved_at": iso_date(row["fecha_resultado"]),
         "abono_id": row["abono_id"],
+    }
+
+
+def to_public_history_item(row: CollectionRow) -> dict:
+    return {
+        "id": row["id"],
+        "name": row["nombre"],
+        "last_name": row["apellido_paterno"],
+        "mother_last_name": row["apellido_materno"],
+        "date": iso_date(row["updated_at"]),
+        "status": row["estado"],
+        "amount": row["monto_recolectado"],
     }
 
 

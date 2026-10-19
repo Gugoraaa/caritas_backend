@@ -3,10 +3,10 @@
    Datos mock para la base "caritas" (SQL Server).
 
    Tablas que puebla: Users (solo usuarios mock), Donantes, Causas,
-   Promesas, Abonos, Llamadas.
+   Promesas, Abonos, Llamadas, Recolecciones.
 
    OJO: con @RESET = 1 (valor por defecto) BORRA TODAS las filas de
-   Donantes, Causas, Promesas, Abonos y Llamadas, y los usuarios cuyo
+   Donantes, Causas, Promesas, Abonos, Llamadas y Recolecciones, y los usuarios cuyo
    email termina en @mock.local. Los usuarios reales no se tocan.
    Pon @RESET = 0 si solo quieres agregar encima de lo que ya hay.
 
@@ -38,6 +38,12 @@ BEGIN TRANSACTION;
    --------------------------------------------------------------------------- */
 IF @RESET = 1
 BEGIN
+    DELETE FROM dbo.Recolecciones;
+    -- Recolecciones.id es IDENTITY: se reinicia para que los ids salgan igual.
+    -- Solo si ya se uso; en una tabla nueva RESEED 0 haria arrancar en 0.
+    IF EXISTS (SELECT 1 FROM sys.identity_columns
+               WHERE object_id = OBJECT_ID(N'dbo.Recolecciones') AND last_value IS NOT NULL)
+        DBCC CHECKIDENT ('dbo.Recolecciones', RESEED, 0) WITH NO_INFOMSGS;
     DELETE FROM dbo.Llamadas;
     DELETE FROM dbo.Abonos;
     DELETE FROM dbo.Promesas;
@@ -352,12 +358,14 @@ IF OBJECTPROPERTY(OBJECT_ID('dbo.Abonos'), 'TableHasIdentity') = 1
        "estado" no tiene CHECK en produccion; se usan agendada / cancelada / completada
        fecha_agendada es relativa a @hoy: ayer, hoy, manana, +2 o +4 dias,
        para que la ventana de hoy+manana siempre tenga contenido.
+       notas_llamada: solo las completadas llevan nota.
    --------------------------------------------------------------------------- */
 IF OBJECTPROPERTY(OBJECT_ID('dbo.Llamadas'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Llamadas ON;
 
 INSERT INTO dbo.Llamadas
-    (id, resultado_llamado, monto_comprometido, estado, proposito, fecha_agendada, promesa_id)
+    (id, resultado_llamado, monto_comprometido, estado, proposito, fecha_agendada,
+     promesa_id, notas_llamada)
 SELECT
     @offLlamada + ROW_NUMBER() OVER (ORDER BY p.id, k.i),
     CASE (p.id + k.i) % 5 WHEN 0 THEN N'contactado'
@@ -379,7 +387,13 @@ SELECT
             CASE (p.id + k.i) % 5 WHEN 0 THEN -1 WHEN 1 THEN 0 WHEN 2 THEN 1
                                   WHEN 3 THEN 2 ELSE 4 END,
             @hoy))),
-    p.id
+    p.id,
+    CASE WHEN (p.id + k.i) % 6 IN (0, 1) THEN NULL     -- canceladas y agendadas
+         ELSE CASE (p.id + k.i) % 3
+                  WHEN 0 THEN N'Prefiere que le llamen por la tarde.'
+                  WHEN 1 THEN N'Confirmó sus datos de contacto.'
+                  ELSE N'Pidió recibo deducible por correo.' END
+    END
 FROM dbo.Promesas p
 JOIN @nums k ON k.i <= ((p.id - @offPromesa) * 7) % 3    -- 0..2 llamadas
 WHERE p.id > @offPromesa;                                -- solo las recién creadas
@@ -387,17 +401,89 @@ WHERE p.id > @offPromesa;                                -- solo las recién cre
 IF OBJECTPROPERTY(OBJECT_ID('dbo.Llamadas'), 'TableHasIdentity') = 1
     SET IDENTITY_INSERT dbo.Llamadas OFF;
 
+/* ---------------------------------------------------------------------------
+   7. Recolecciones  (una por promesa activa; id es IDENTITY)
+       Se numeran las promesas activas (n) y con eso se reparte todo, para no
+       depender de p.id % 5, que ya decide el state de la promesa.
+       fecha_programada relativa a @hoy segun n % 6: hace 2 dias, ayer, hoy
+       (x2), manana o +2 dias.
+       Las pasadas ya tienen resultado: 'confirmada' si la promesa tiene un
+       abono en efectivo (se enlaza en abono_id), si no 'no_recolectada' con
+       motivo. Las de hoy en adelante quedan 'pendiente'.
+       Fechas: created_at = 3 dias antes de fecha_programada; updated_at =
+       fecha_resultado en las que ya tienen resultado, created_at en las
+       pendientes. Se mandan explicitas: el trigger solo corre en UPDATE.
+   --------------------------------------------------------------------------- */
+INSERT INTO dbo.Recolecciones
+    (promesa_id, recolector_id, fecha_programada, ventana_inicio, ventana_fin,
+     monto, notas_domicilio, estado, motivo, fecha_resultado, abono_id,
+     created_at, updated_at)
+SELECT
+    r.promesa_id,
+    r.recolector_id,
+    r.fecha_programada,
+    DATEADD(MINUTE, -30, r.fecha_programada),
+    DATEADD(MINUTE, 30, r.fecha_programada),
+    r.monto,
+    r.notas_domicilio,
+    CASE WHEN r.dia >= 0 THEN N'pendiente'
+         WHEN r.abono_id IS NOT NULL THEN N'confirmada'
+         ELSE N'no_recolectada' END,
+    CASE WHEN r.dia >= 0 OR r.abono_id IS NOT NULL THEN NULL
+         ELSE CASE r.n % 4 WHEN 0 THEN N'nadie_en_domicilio'
+                           WHEN 1 THEN N'reprogramar'
+                           WHEN 2 THEN N'domicilio_incorrecto'
+                           ELSE N'ya_no_desea_donar' END
+    END,
+    CASE WHEN r.dia >= 0 THEN NULL ELSE DATEADD(MINUTE, 10, r.fecha_programada) END,
+    CASE WHEN r.dia >= 0 THEN NULL ELSE r.abono_id END,
+    DATEADD(DAY, -3, r.fecha_programada),
+    CASE WHEN r.dia >= 0 THEN DATEADD(DAY, -3, r.fecha_programada)
+         ELSE DATEADD(MINUTE, 10, r.fecha_programada) END
+FROM (
+    SELECT
+        a.promesa_id,
+        a.n,
+        d.dia,
+        -- Bloques de 6 seguidos por usuario: como el dia sale de n % 6, cada
+        -- recolector tiene historial (pasadas) y ruta (hoy en adelante).
+        CASE WHEN a.n % 7 = 0 THEN NULL                 -- algunas sin recolector
+             ELSE (SELECT u.id FROM @users u WHERE u.rn = (((a.n - 1) / 6) % @nUsers) + 1) END
+            AS recolector_id,
+        DATEADD(HOUR, 9 + (a.n % 8), CONVERT(DATETIME2, DATEADD(DAY, d.dia, @hoy)))
+            AS fecha_programada,
+        a.monto,
+        CASE WHEN a.n % 2 = 0 THEN N'Tocar el timbre de la puerta café.' ELSE NULL END
+            AS notas_domicilio,
+        (SELECT MAX(ab.id) FROM dbo.Abonos ab
+         WHERE ab.promesa_id = a.promesa_id AND ab.metodo_pago = N'efectivo') AS abono_id
+    FROM (
+        SELECT
+            p.id AS promesa_id,
+            ROW_NUMBER() OVER (ORDER BY p.id) AS n,
+            CAST(p.monto_objetivo / CASE WHEN ISNULL(p.numero_frequencia, 0) > 0
+                                         THEN p.numero_frequencia ELSE 1 END
+                 AS DECIMAL(14, 2)) AS monto
+        FROM dbo.Promesas p
+        WHERE p.id > @offPromesa                        -- solo las recién creadas
+          AND p.state = N'activo'
+    ) a
+    CROSS APPLY (SELECT CASE a.n % 6 WHEN 0 THEN -2 WHEN 1 THEN -1 WHEN 2 THEN 0
+                                     WHEN 3 THEN 0  WHEN 4 THEN 1  ELSE 2 END AS dia) d
+) r;
+
 COMMIT TRANSACTION;
 
 /* ---------------------------------------------------------------------------
-   7. Resumen
+   8. Resumen
    --------------------------------------------------------------------------- */
 SELECT 'Users (mock)' AS tabla, COUNT(*) AS filas FROM dbo.Users WHERE email LIKE '%' + @MOCK_DOMAIN
 UNION ALL SELECT 'Donantes', COUNT(*) FROM dbo.Donantes
 UNION ALL SELECT 'Causas',   COUNT(*) FROM dbo.Causas
 UNION ALL SELECT 'Promesas', COUNT(*) FROM dbo.Promesas
 UNION ALL SELECT 'Abonos',   COUNT(*) FROM dbo.Abonos
-UNION ALL SELECT 'Llamadas', COUNT(*) FROM dbo.Llamadas;
+UNION ALL SELECT 'Llamadas', COUNT(*) FROM dbo.Llamadas
+UNION ALL SELECT 'Recolecciones', COUNT(*) FROM dbo.Recolecciones;
 
 END TRY
 BEGIN CATCH

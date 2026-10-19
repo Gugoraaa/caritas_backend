@@ -33,6 +33,23 @@ FIND_QUERY = """SELECT
                 JOIN Donantes d ON d.id = p.donante_id
                WHERE r.id = %s;"""
 
+# Historial del recolector: solo las ya resueltas (las pendientes no se han
+# hecho). El monto recolectado sale del abono; sin abono no se recolecto nada.
+HISTORY_QUERY = """SELECT
+                       r.id,
+                       r.estado,
+                       r.updated_at,
+                       ISNULL(a.monto, 0) AS monto_recolectado,
+                       d.nombre,
+                       d.apellido_paterno,
+                       d.apellido_materno
+                   FROM Recolecciones r
+                   JOIN Promesas p ON p.id = r.promesa_id
+                   JOIN Donantes d ON d.id = p.donante_id
+                   LEFT JOIN Abonos a ON a.id = r.abono_id
+                  WHERE r.recolector_id = %s
+                    AND r.estado <> 'pendiente'"""
+
 # El filtro por estado evita confirmar o cerrar dos veces la misma recoleccion
 # si llegan dos peticiones al mismo tiempo.
 CONFIRM_QUERY = """UPDATE Recolecciones
@@ -71,6 +88,28 @@ class CollectionsRepository:
             try:
                 cursor.execute(FIND_QUERY, (collection_id,))
                 return cursor.fetchone()
+            finally:
+                cursor.close()
+
+    def find_history(
+        self, user_id: int, since: datetime | None, until: datetime | None
+    ) -> list[CollectionRow]:
+        """Rango [since, until) sobre updated_at; None deja ese lado abierto."""
+        query = HISTORY_QUERY
+        params: list = [user_id]
+        if since is not None:
+            query += " AND r.updated_at >= %s"
+            params.append(since)
+        if until is not None:
+            query += " AND r.updated_at < %s"
+            params.append(until)
+        query += " ORDER BY r.updated_at DESC, r.id DESC;"
+
+        with self._database.connection() as connection:
+            cursor = connection.cursor(as_dict=True)
+            try:
+                cursor.execute(query, tuple(params))
+                return cursor.fetchall()
             finally:
                 cursor.close()
 

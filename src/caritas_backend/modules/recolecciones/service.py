@@ -14,6 +14,7 @@ INVALID_RANGE = "from must be on or before to"
 STATUS_PENDING = "pendiente"
 STATUS_CONFIRMED = "confirmada"
 STATUS_NOT_COLLECTED = "no_recolectada"
+STATUSES = (STATUS_PENDING, STATUS_CONFIRMED, STATUS_NOT_COLLECTED)
 
 NOT_COLLECTED_REASONS = {
     "nadie_en_domicilio": "No había nadie en el domicilio",
@@ -34,6 +35,28 @@ class CollectionsService:
 
     def get_collection(self, collection_id: int) -> dict:
         return to_public_collection(self._find(collection_id))
+
+    def list_collections(
+        self,
+        status: str | None,
+        collector_id: int | None,
+        date_from: date | None,
+        date_to: date | None,
+    ) -> list[dict]:
+        """Todas las recolecciones; las fechas (dia inclusivo) filtran fecha_programada."""
+        if status is not None and status not in STATUSES:
+            raise HttpException(400, f"status must be one of {list(STATUSES)}")
+        if date_from and date_to and date_from > date_to:
+            raise HttpException(400, INVALID_RANGE)
+
+        since = datetime.combine(date_from, time.min) if date_from else None
+        until = datetime.combine(date_to + timedelta(days=1), time.min) if date_to else None
+        try:
+            rows = self.collections.find_all(status, collector_id, since, until)
+        except Exception as error:
+            log.exception("Failed to list collections")
+            raise HttpException(500, INTERNAL_ERROR) from error
+        return [to_public_collection(row) for row in rows]
 
     def get_history(
         self, user_id: int, date_from: date | None, date_to: date | None

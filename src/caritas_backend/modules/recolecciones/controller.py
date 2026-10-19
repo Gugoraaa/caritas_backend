@@ -20,6 +20,20 @@ NOT_COLLECTED_RULES = {
 }
 
 
+@blueprint.get("/collections")
+@require_auth
+def list_collections(user: AuthUser) -> Response:
+    collections_service = current_app.extensions["collections"]
+    return jsonify(
+        collections_service.list_collections(
+            request.args.get("status"),
+            _parse_int("collector_id"),
+            _parse_date("from"),
+            _parse_date("to"),
+        )
+    )
+
+
 @blueprint.get("/collections/reasons")
 def get_not_collected_reasons() -> Response:
     return jsonify(get_reasons())
@@ -68,3 +82,13 @@ def _parse_date(name: str) -> date | None:
         return date.fromisoformat(raw)
     except ValueError as error:
         raise HttpException(400, f"{name} must be a date (YYYY-MM-DD)") from error
+
+
+def _parse_int(name: str) -> int | None:
+    raw = request.args.get(name)
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError as error:
+        raise HttpException(400, f"{name} must be an integer") from error

@@ -5,7 +5,7 @@ from ...database import Database
 
 CollectionRow = dict
 
-FIND_QUERY = """SELECT
+LIST_QUERY = """SELECT
                     r.id,
                     r.promesa_id,
                     r.recolector_id,
@@ -31,7 +31,9 @@ FIND_QUERY = """SELECT
                 FROM Recolecciones r
                 JOIN Promesas p ON p.id = r.promesa_id
                 JOIN Donantes d ON d.id = p.donante_id
-               WHERE r.id = %s;"""
+               WHERE 1 = 1"""
+
+FIND_QUERY = LIST_QUERY + " AND r.id = %s;"
 
 # Historial del recolector: solo las ya resueltas (las pendientes no se han
 # hecho). El monto recolectado sale del abono; sin abono no se recolecto nada.
@@ -88,6 +90,38 @@ class CollectionsRepository:
             try:
                 cursor.execute(FIND_QUERY, (collection_id,))
                 return cursor.fetchone()
+            finally:
+                cursor.close()
+
+    def find_all(
+        self,
+        status: str | None,
+        collector_id: int | None,
+        since: datetime | None,
+        until: datetime | None,
+    ) -> list[CollectionRow]:
+        """Rango [since, until) sobre fecha_programada; None omite el filtro."""
+        query = LIST_QUERY
+        params: list = []
+        if status is not None:
+            query += " AND r.estado = %s"
+            params.append(status)
+        if collector_id is not None:
+            query += " AND r.recolector_id = %s"
+            params.append(collector_id)
+        if since is not None:
+            query += " AND r.fecha_programada >= %s"
+            params.append(since)
+        if until is not None:
+            query += " AND r.fecha_programada < %s"
+            params.append(until)
+        query += " ORDER BY r.fecha_programada DESC, r.id DESC;"
+
+        with self._database.connection() as connection:
+            cursor = connection.cursor(as_dict=True)
+            try:
+                cursor.execute(query, tuple(params))
+                return cursor.fetchall()
             finally:
                 cursor.close()
 

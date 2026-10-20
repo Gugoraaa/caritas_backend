@@ -78,6 +78,7 @@ class AdminResumenService:
                 "weekly_totals": weeks,
             },
             "call_outcomes": outcomes,
+            "completed_calls_total": sum(row["call_count"] for row in outcomes),
             "calls_by_responsible": callers,
             "donor_risk": risk,
         }

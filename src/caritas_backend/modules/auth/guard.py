@@ -15,8 +15,9 @@ ADMIN_REQUIRED = "Admin role required"
 ROLE_REQUIRED = "Your role cannot use this endpoint"
 
 ADMIN_ROLE = "admin"
-TELEMARKETING_ROLE = "telemarketing"
-COURIER_ROLE = "repartidor"
+# Los mismos valores que permite el CHECK de dbo.Users.role (en mayusculas).
+TELEMARKETING_ROLE = "telemarketina"
+COURIER_ROLE = "recolector"
 
 AuthUser = dict
 

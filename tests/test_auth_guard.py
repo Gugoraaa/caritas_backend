@@ -184,13 +184,13 @@ def test_is_admin(role, expected):
 
 def role_view(app, roles):
     app.extensions["auth"].users = FakeUsers(roles)
-    return require_role("repartidor")(lambda user: user)
+    return require_role("recolector")(lambda user: user)
 
 
 def test_require_role_accepts_listed_role(app):
-    view = role_view(app, {3: "Repartidor"})
+    view = role_view(app, {3: "Recolector"})
     with app.test_request_context("/", headers=bearer({"userId": 3, "role": "x"})):
-        assert view() == {"userId": 3, "role": "Repartidor"}
+        assert view() == {"userId": 3, "role": "Recolector"}
 
 
 def test_require_role_always_accepts_admin(app):
@@ -200,12 +200,12 @@ def test_require_role_always_accepts_admin(app):
 
 
 def test_require_role_is_403_for_other_roles(app):
-    view = role_view(app, {2: "telemarketing"})
-    with app.test_request_context("/", headers=bearer({"userId": 2, "role": "repartidor"})):
+    view = role_view(app, {2: "TELEMARKETINA"})
+    with app.test_request_context("/", headers=bearer({"userId": 2, "role": "RECOLECTOR"})):
         assert run_status(view).status == 403
 
 
 def test_require_role_rejects_missing_token(app):
-    view = role_view(app, {3: "repartidor"})
+    view = role_view(app, {3: "RECOLECTOR"})
     with app.test_request_context("/"):
         assert_401(view, MISSING_TOKEN)

@@ -164,7 +164,7 @@ def client():
     repository = FakeCollectionsRepository()
     app = Flask(__name__)
     auth = AuthService(None, SECRET, 3600)
-    auth.users = FakeUsers({1: "admin", 7: "repartidor", 8: "telemarketing"})
+    auth.users = FakeUsers({1: "admin", 7: "RECOLECTOR", 8: "TELEMARKETINA"})
     app.extensions["auth"] = auth
     app.extensions["collections"] = make_service(repository)
     register_error_handlers(app)
@@ -175,7 +175,7 @@ def client():
 
 
 def bearer(user_id):
-    token = sign_token({"userId": user_id, "role": "repartidor"}, SECRET, 3600)
+    token = sign_token({"userId": user_id, "role": "RECOLECTOR"}, SECRET, 3600)
     return {"Authorization": f"Bearer {token}"}
 
 

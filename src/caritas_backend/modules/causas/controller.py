@@ -1,6 +1,7 @@
 from flask import Blueprint, Response, current_app, jsonify
 
 from ...validation import is_not_empty, is_number, is_string, optional, validate_body
+from ..auth.guard import AuthUser, require_admin
 
 blueprint = Blueprint("causas", __name__)
 
@@ -41,21 +42,24 @@ def get_causa(causa_id: int) -> Response:
 
 
 @blueprint.post("/causas")
+@require_admin
 @validate_body(CREATE_RULES)
-def create_causa(body: dict) -> tuple[Response, int]:
+def create_causa(body: dict, user: AuthUser) -> tuple[Response, int]:
     causa_service = current_app.extensions["causas"]
     return jsonify(causa_service.create(body)), 201
 
 
 @blueprint.put("/causas/<int:causa_id>")
+@require_admin
 @validate_body(UPDATE_RULES)
-def update_causa(causa_id: int, body: dict) -> Response:
+def update_causa(causa_id: int, body: dict, user: AuthUser) -> Response:
     causa_service = current_app.extensions["causas"]
     return jsonify(causa_service.update(causa_id, body))
 
 
 @blueprint.delete("/causas/<int:causa_id>")
-def delete_causa(causa_id: int) -> tuple[Response, int]:
+@require_admin
+def delete_causa(causa_id: int, user: AuthUser) -> tuple[Response, int]:
     causa_service = current_app.extensions["causas"]
     causa_service.delete(causa_id)
     return jsonify({}), 204

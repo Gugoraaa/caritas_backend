@@ -1,18 +1,19 @@
 from flask import Blueprint, Response, current_app, jsonify, request
 
 from ...errors import HttpException
-from ..auth.guard import user_id_from_token_or_query
+from ..auth.guard import TELEMARKETING_ROLE, AuthUser, require_role
 from .service import HISTORY_TYPES
 
 blueprint = Blueprint("history", __name__)
 
 
 @blueprint.get("/history")
-def get_history() -> Response:
+@require_role(TELEMARKETING_ROLE)
+def get_history(user: AuthUser) -> Response:
     history_service = current_app.extensions["history"]
     return jsonify(
         history_service.get_history(
-            user_id_from_token_or_query(),
+            user["userId"],
             _parse_donor_id(),
             _parse_choice("type", HISTORY_TYPES) or "all",
             _parse_search(),
@@ -21,9 +22,10 @@ def get_history() -> Response:
 
 
 @blueprint.get("/history/donors")
-def get_history_donors() -> Response:
+@require_role(TELEMARKETING_ROLE)
+def get_history_donors(user: AuthUser) -> Response:
     history_service = current_app.extensions["history"]
-    return jsonify(history_service.get_donors(user_id_from_token_or_query()))
+    return jsonify(history_service.get_donors(user["userId"]))
 
 
 def _parse_donor_id() -> int | None:

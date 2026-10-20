@@ -206,7 +206,11 @@ class CollectionsRepository:
 
     def update_pending(self, collection_id: int, fields: dict) -> bool:
         """fields: columna -> valor (solo UPDATABLE_COLUMNS). False si ya no estaba pendiente."""
-        assert fields.keys() <= set(UPDATABLE_COLUMNS)
+        # Los nombres de columna van al SQL tal cual: esta lista blanca es lo que
+        # evita la inyeccion. No usar assert, que python -O lo elimina.
+        unknown = fields.keys() - set(UPDATABLE_COLUMNS)
+        if unknown:
+            raise ValueError(f"Columnas no actualizables: {sorted(unknown)}")
         assignments = ", ".join(f"{column} = %s" for column in fields)
         query = f"UPDATE Recolecciones SET {assignments} WHERE id = %s AND estado = 'pendiente';"
         return self._write(query, (*fields.values(), collection_id))

@@ -19,3 +19,9 @@ wheels/
 
 # Docker
 docker-compose.override.yml
+
+# Llaves privadas del certificado TLS: se reparten fuera de git.
+certs/*.key
+
+# Reportes de OWASP ZAP (evidencia, se entregan aparte)
+zap-reports/

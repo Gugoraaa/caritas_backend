@@ -16,18 +16,30 @@ Todo se corre con `uv`: `uv add` para dependencias, `uv run` para ejecutar.
 ## Correr
 
 ```bash
-uv run python -m caritas_backend     # dev, escucha en 0.0.0.0:$PORT (default 3000)
+uv run python -m caritas_backend     # dev, escucha en 127.0.0.1:$PORT (default 3000)
+HOST=0.0.0.0 uv run python -m caritas_backend   # dev abierto a la red local
 uv run caritas-backend               # idéntico, vía el script del proyecto
 ```
 
 El servidor de desarrollo de Flask no es para producción. Con un WSGI real:
 
 ```bash
-uv run --group prod gunicorn -w 4 -b 0.0.0.0:3000 'caritas_backend:create_app()'
+uv run --group prod gunicorn 'caritas_backend:create_app()'
 ```
 
 `gunicorn` vive en el grupo `prod`, que `uv sync` no instala. Es el mismo
-comando que corre la imagen de Docker.
+comando que corre la imagen de Docker y el que hay que usar en el servidor;
+puerto, workers y TLS salen de `gunicorn.conf.py` (que también lee el `.env`).
+No usar `python -m caritas_backend` en producción: el servidor de desarrollo
+expone su versión en la cabecera `Server` y no está pensado para carga real.
+
+### Certificado TLS (`certs/`)
+
+En git están el certificado (`.cer`), la config (`.cnf`) y el CSR (`.csr`). Las
+llaves privadas (`certs/*.key`) **no se versionan**: pedíselas al equipo por un
+canal privado y dejalas en `certs/`. `python -m caritas_backend` y el contenedor
+de Docker las leen de ahí (se pueden cambiar con `SSL_CERT_FILE` y
+`SSL_KEY_FILE`).
 
 La app arranca aunque SQL Server esté caído: se loguea un warning y listo. En
 ese estado `GET /` responde 200 y `POST /login` responde 500.
@@ -35,7 +47,8 @@ ese estado `GET /` responde 200 y `POST /login` responde 500.
 ## Docker
 
 ```bash
-docker compose up --build    # SQL Server + esquema + datos mock + API en http://localhost:3000
+docker compose up --build    # SQL Server + esquema + datos mock + API en https://localhost:3000
+SSL_CERT_FILE= SSL_KEY_FILE= docker compose up   # sin llave en certs/: HTTP plano, solo dev
 docker compose down          # baja todo; los datos quedan en el volumen
 docker compose down -v       # baja todo y borra la base
 ```
@@ -61,7 +74,8 @@ Después de `docker compose up` ya se puede pegar a `POST /login` con:
 | `admin@caritas.com` | `admin123` | `admin` |
 
 ```bash
-curl -X POST http://localhost:3000/login \
+# -k: el certificado es de minihub.tc2007b.tec.mx, no de localhost
+curl -k -X POST https://localhost:3000/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@caritas.com","password":"admin123"}'
 ```

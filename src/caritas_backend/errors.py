@@ -9,10 +9,16 @@ log = logging.getLogger(__name__)
 
 
 class HttpException(Exception):
-    def __init__(self, status: int, message: str | list[str]):
+    def __init__(
+        self,
+        status: int,
+        message: str | list[str],
+        headers: dict[str, str] | None = None,
+    ):
         super().__init__(message)
         self.status = status
         self.message = message
+        self.headers = headers or {}
 
     def body(self) -> dict:
         return {
@@ -24,8 +30,8 @@ class HttpException(Exception):
 
 def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(HttpException)
-    def handle_http(error: HttpException) -> tuple[Response, int]:
-        return jsonify(error.body()), error.status
+    def handle_http(error: HttpException) -> tuple[Response, int, dict[str, str]]:
+        return jsonify(error.body()), error.status, error.headers
 
     @app.errorhandler(HTTPException)
     def handle_werkzeug(error: HTTPException) -> tuple[Response, int]:

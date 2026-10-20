@@ -17,7 +17,9 @@ from .modules.donor.service import DonorService
 from .modules.historial.service import HistoryService
 from .modules.llamadas.service import CallsService
 from .modules.recolecciones.service import CollectionsService
+from .rate_limit import register_rate_limit
 from .routes import register_routes
+from .secure_headers import register_secure_headers
 from .security import parse_duration
 
 log = logging.getLogger(__name__)
@@ -46,6 +48,8 @@ def create_app() -> Flask:
     app.extensions["collections"] = CollectionsService(database)
 
     register_error_handlers(app)
+    register_rate_limit(app)
+    register_secure_headers(app)
     register_routes(app)
     atexit.register(database.close)
 

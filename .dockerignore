@@ -19,6 +19,9 @@ wheels/
 
 # El esquema se monta como volumen en el servicio db-init, no se copia.
 db/
+# El certificado y su llave se montan como volumen en el servicio api: la llave
+# no queda dentro de la imagen.
+certs/
 tests/
 
 Dockerfile

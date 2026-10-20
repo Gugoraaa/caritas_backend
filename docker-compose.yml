@@ -69,16 +69,26 @@ services:
       WEB_CONCURRENCY: "4"
       JWT_SECRET: mwhuHJUEQx1WDpB5GzIov/Eh24qTl5eAU57JjKDX2eui/dwZqMqcKBU+eAHALlyv
       JWT_EXPIRES_IN: 8h
+      # HTTPS con el certificado de certs/. Para HTTP plano en desarrollo:
+      #   SSL_CERT_FILE= SSL_KEY_FILE= docker compose up
+      SSL_CERT_FILE: "${SSL_CERT_FILE-/app/certs/minihub.tc2007b.tec.mx.cer}"
+      SSL_KEY_FILE: "${SSL_KEY_FILE-/app/certs/minihub.tc2007b.tec.mx.key}"
+    volumes:
+      - ./certs:/app/certs:ro
     ports:
       - "${API_HOST_PORT:-3000}:3000"
     healthcheck:
+      # El certificado es de minihub.tc2007b.tec.mx, no de 127.0.0.1: el
+      # healthcheck no lo verifica, solo comprueba que la API responda.
       test:
         - CMD
         - python
         - -c
         - |
-          import urllib.request
-          urllib.request.urlopen("http://127.0.0.1:3000/", timeout=3).read()
+          import os, ssl, urllib.request
+          scheme = "https" if os.environ.get("SSL_CERT_FILE") else "http"
+          context = ssl._create_unverified_context()
+          urllib.request.urlopen(f"{scheme}://127.0.0.1:3000/", timeout=3, context=context).read()
       interval: 15s
       timeout: 5s
       retries: 3

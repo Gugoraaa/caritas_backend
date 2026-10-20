@@ -522,7 +522,58 @@ COLLECTION_PATHS = {
                 "404": ERROR_RESPONSES["404"],
                 "500": ERROR_RESPONSES["500"],
             },
-        }
+        },
+        "patch": {
+            "tags": ["collections"],
+            "summary": "Edita una recoleccion pendiente",
+            "description": (
+                "Actualiza solo los campos enviados. Solo si esta pendiente. "
+                "scheduled_at y amount no aceptan null."
+            ),
+            "security": BEARER,
+            "parameters": [COLLECTION_ID_PARAM],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "minProperties": 1,
+                            "properties": {
+                                "collector_id": {"type": "integer", "nullable": True},
+                                "scheduled_at": {"type": "string", "format": "date-time"},
+                                "window_start": {"type": "string", "format": "date-time", "nullable": True},
+                                "window_end": {"type": "string", "format": "date-time", "nullable": True},
+                                "amount": {"type": "number", "minimum": 0.01},
+                                "address_notes": {"type": "string", "maxLength": 500, "nullable": True},
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "200": _collection_response("Recoleccion actualizada"),
+                "400": ERROR_RESPONSES["400"],
+                "401": ERROR_RESPONSES["401"],
+                "404": ERROR_RESPONSES["404"],
+                "409": ERROR_RESPONSES["409"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        },
+        "delete": {
+            "tags": ["collections"],
+            "summary": "Elimina una recoleccion pendiente",
+            "description": "Solo si esta pendiente; las resueltas se conservan como historial.",
+            "security": BEARER,
+            "parameters": [COLLECTION_ID_PARAM],
+            "responses": {
+                "204": {"description": "Recoleccion eliminada"},
+                "401": ERROR_RESPONSES["401"],
+                "404": ERROR_RESPONSES["404"],
+                "409": ERROR_RESPONSES["409"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        },
     },
     "/collections/{collection_id}/confirm": {
         "post": {

@@ -79,6 +79,18 @@ NOT_COLLECTED_QUERY = """UPDATE Recolecciones
                           WHERE id = %s
                             AND estado = 'pendiente';"""
 
+DELETE_QUERY = """DELETE FROM Recolecciones WHERE id = %s AND estado = 'pendiente';"""
+
+# Nombres de columna fijos (nunca del cliente): solo cambian los valores.
+UPDATABLE_COLUMNS = (
+    "recolector_id",
+    "fecha_programada",
+    "ventana_inicio",
+    "ventana_fin",
+    "monto",
+    "notas_domicilio",
+)
+
 
 class CollectionsRepository:
     def __init__(self, database: Database) -> None:
@@ -189,5 +201,27 @@ class CollectionsRepository:
                 updated = cursor.rowcount > 0
                 connection.commit()
                 return updated
+            finally:
+                cursor.close()
+
+    def update_pending(self, collection_id: int, fields: dict) -> bool:
+        """fields: columna -> valor (solo UPDATABLE_COLUMNS). False si ya no estaba pendiente."""
+        assert fields.keys() <= set(UPDATABLE_COLUMNS)
+        assignments = ", ".join(f"{column} = %s" for column in fields)
+        query = f"UPDATE Recolecciones SET {assignments} WHERE id = %s AND estado = 'pendiente';"
+        return self._write(query, (*fields.values(), collection_id))
+
+    def delete_pending(self, collection_id: int) -> bool:
+        """False si ya no estaba pendiente."""
+        return self._write(DELETE_QUERY, (collection_id,))
+
+    def _write(self, query: str, params: tuple) -> bool:
+        with self._database.connection() as connection:
+            cursor = connection.cursor(as_dict=True)
+            try:
+                cursor.execute(query, params)
+                changed = cursor.rowcount > 0
+                connection.commit()
+                return changed
             finally:
                 cursor.close()

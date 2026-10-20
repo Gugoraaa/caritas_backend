@@ -23,6 +23,15 @@ NOT_COLLECTED_REASONS = {
     "ya_no_desea_donar": "El donante ya no desea donar",
 }
 
+UPDATE_FIELDS = {
+    "collector_id": "recolector_id",
+    "scheduled_at": "fecha_programada",
+    "window_start": "ventana_inicio",
+    "window_end": "ventana_fin",
+    "amount": "monto",
+    "address_notes": "notas_domicilio",
+}
+
 # La DB guarda hora local de Monterrey sin zona (UTC-6, sin horario de verano).
 BUSINESS_TIMEZONE = ZoneInfo("America/Monterrey")
 
@@ -122,6 +131,39 @@ class CollectionsService:
             }
         )
 
+    def update(self, collection_id: int, fields: dict) -> dict:
+        """Edita una recoleccion pendiente; fields usa los nombres publicos."""
+        if not fields:
+            raise HttpException(400, "At least one field is required")
+        columns = {UPDATE_FIELDS[name]: value for name, value in fields.items()}
+        for column in ("fecha_programada", "ventana_inicio", "ventana_fin"):
+            if columns.get(column) is not None:
+                columns[column] = parse_datetime(columns[column], column)
+        if columns.get("monto") is not None and columns["monto"] <= 0:
+            raise HttpException(400, "amount must be greater than 0")
+        if columns.get("fecha_programada", True) is None or columns.get("monto", True) is None:
+            raise HttpException(400, "scheduled_at and amount cannot be null")
+
+        self._find_pending(collection_id)
+        try:
+            updated = self.collections.update_pending(collection_id, columns)
+        except Exception as error:
+            log.exception("Failed to update collection")
+            raise HttpException(500, INTERNAL_ERROR) from error
+        if not updated:
+            raise HttpException(409, NOT_PENDING)
+        return self.get_collection(collection_id)
+
+    def delete(self, collection_id: int) -> None:
+        self._find_pending(collection_id)
+        try:
+            deleted = self.collections.delete_pending(collection_id)
+        except Exception as error:
+            log.exception("Failed to delete collection")
+            raise HttpException(500, INTERNAL_ERROR) from error
+        if not deleted:
+            raise HttpException(409, NOT_PENDING)
+
     def _find_pending(self, collection_id: int) -> CollectionRow:
         row = self._find(collection_id)
         if row["estado"] != STATUS_PENDING:
@@ -137,6 +179,14 @@ class CollectionsService:
         if row is None:
             raise HttpException(404, NOT_FOUND)
         return row
+
+
+def parse_datetime(value: str, name: str) -> datetime:
+    try:
+        # Hora local sin zona, como la guarda la DB.
+        return datetime.fromisoformat(value).replace(tzinfo=None)
+    except ValueError as error:
+        raise HttpException(400, f"{name} must be an ISO date-time") from error
 
 
 def get_reasons() -> list[dict]:

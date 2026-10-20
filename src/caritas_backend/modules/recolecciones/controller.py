@@ -3,7 +3,15 @@ from datetime import date
 from flask import Blueprint, Response, current_app, jsonify, request
 
 from ...errors import HttpException
-from ...validation import is_string, one_of, validate_body
+from ...validation import (
+    is_integer,
+    is_string,
+    max_length,
+    min_value,
+    one_of,
+    optional,
+    validate_body,
+)
 from ..auth.guard import AuthUser, require_auth
 from .service import NOT_COLLECTED_REASONS, get_reasons
 
@@ -17,6 +25,15 @@ NOT_COLLECTED_RULES = {
             f"must be one of {list(NOT_COLLECTED_REASONS)}",
         ),
     ],
+}
+
+UPDATE_RULES = {
+    "collector_id": [(optional(is_integer), "must be an integer")],
+    "scheduled_at": [(optional(is_string), "must be an ISO date-time string")],
+    "window_start": [(optional(is_string), "must be an ISO date-time string")],
+    "window_end": [(optional(is_string), "must be an ISO date-time string")],
+    "amount": [(optional(min_value(0.01)), "must be a number greater than 0")],
+    "address_notes": [(optional(max_length(500)), "must be a string of at most 500 characters")],
 }
 
 
@@ -55,6 +72,22 @@ def get_collection_history(user: AuthUser) -> Response:
 def get_collection(collection_id: int, user: AuthUser) -> Response:
     collections_service = current_app.extensions["collections"]
     return jsonify(collections_service.get_collection(collection_id))
+
+
+@blueprint.patch("/collections/<int:collection_id>")
+@require_auth
+@validate_body(UPDATE_RULES)
+def update_collection(collection_id: int, user: AuthUser, body: dict) -> Response:
+    collections_service = current_app.extensions["collections"]
+    return jsonify(collections_service.update(collection_id, body))
+
+
+@blueprint.delete("/collections/<int:collection_id>")
+@require_auth
+def delete_collection(collection_id: int, user: AuthUser) -> tuple[str, int]:
+    collections_service = current_app.extensions["collections"]
+    collections_service.delete(collection_id)
+    return "", 204
 
 
 @blueprint.post("/collections/<int:collection_id>/confirm")

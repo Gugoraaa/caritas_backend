@@ -163,7 +163,9 @@ def test_history_database_error_becomes_500():
 def client():
     repository = FakeCollectionsRepository()
     app = Flask(__name__)
-    app.extensions["auth"] = AuthService(None, SECRET, 3600)
+    auth = AuthService(None, SECRET, 3600)
+    auth.users = FakeUsers({1: "admin", 7: "RECOLECTOR", 8: "TELEMARKETINA"})
+    app.extensions["auth"] = auth
     app.extensions["collections"] = make_service(repository)
     register_error_handlers(app)
     app.register_blueprint(blueprint)
@@ -173,7 +175,7 @@ def client():
 
 
 def bearer(user_id):
-    token = sign_token({"userId": user_id, "role": "recolector"}, SECRET, 3600)
+    token = sign_token({"userId": user_id, "role": "RECOLECTOR"}, SECRET, 3600)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -198,6 +200,46 @@ def test_history_endpoint_rejects_bad_date(client):
 
 def test_history_endpoint_without_token_is_401(client):
     assert client.get("/collections/history").status_code == 401
+
+
+def test_telemarketing_cannot_use_collections(client):
+    assert client.get("/collections/5", headers=bearer(8)).status_code == 403
+    assert client.post("/collections/5/confirm", headers=bearer(8)).status_code == 403
+
+
+def test_courier_sees_own_collection(client):
+    client.repository.row = {**ROW, "recolector_id": 7}
+    assert client.get("/collections/5", headers=bearer(7)).status_code == 200
+
+
+def test_courier_cannot_touch_other_collection(client):
+    client.repository.row = {**ROW, "recolector_id": 2}
+    assert client.get("/collections/5", headers=bearer(7)).status_code == 403
+    assert client.post("/collections/5/confirm", headers=bearer(7)).status_code == 403
+    response = client.post(
+        "/collections/5/not-collected", json={"reason": "reprogramar"}, headers=bearer(7)
+    )
+    assert response.status_code == 403
+    assert client.repository.confirmed is None
+    assert client.repository.not_collected is None
+
+
+def test_admin_can_open_any_collection(client):
+    client.repository.row = {**ROW, "recolector_id": 2}
+    assert client.get("/collections/5", headers=bearer(1)).status_code == 200
+
+
+def test_courier_cannot_edit_collections(client):
+    assert client.delete("/collections/5", headers=bearer(7)).status_code == 403
+
+
+class FakeUsers:
+    def __init__(self, roles):
+        self.roles = roles
+
+    def find_by_id(self, user_id):
+        role = self.roles.get(user_id)
+        return {"id": user_id, "role": role} if role is not None else None
 
 
 def test_confirm_creates_abono_for_the_collection_amount():

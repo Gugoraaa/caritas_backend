@@ -32,42 +32,6 @@ class AdminResumenService:
             raise HttpException(500, "Internal server error") from error
 
         daily_by_date = {as_date(row["day"]): row["total"] for row in daily}
-        weeks = []
-        cursor = first - timedelta(days=first.weekday())
-        while cursor < following:
-            week_end = cursor + timedelta(days=7)
-            left, right = max(cursor, first), min(week_end, following)
-            total = sum(
-                (
-                    amount
-                    for day, amount in daily_by_date.items()
-                    if left <= day < right
-                ),
-                start=Decimal("0.00"),
-            )
-            weeks.append(
-                {
-                    "start": left.isoformat(),
-                    "end": (right - timedelta(days=1)).isoformat(),
-                    "total": total,
-                }
-            )
-            cursor = week_end
-
-        today = local_now.date()
-        risk = {"green": 0, "yellow": 0, "red": 0}
-        for row in latest:
-            donated = row["latest_donation"]
-            days = (
-                max((today - as_date(donated)).days, 0) if donated is not None else None
-            )
-            risk[
-                "green"
-                if days is not None and days < 30
-                else "yellow"
-                if days is not None and days < 60
-                else "red"
-            ] += 1
         return {
             "period": {
                 "start": first.isoformat(),
@@ -75,12 +39,51 @@ class AdminResumenService:
             },
             "fundraising": {
                 "total": sum(daily_by_date.values(), start=Decimal("0.00")),
-                "weekly_totals": weeks,
+                "weekly_totals": _weekly_totals(daily_by_date, first, following),
             },
             "call_outcomes": outcomes,
+            "completed_calls_total": sum(row["call_count"] for row in outcomes),
             "calls_by_responsible": callers,
-            "donor_risk": risk,
+            "donor_risk": _donor_risk(latest, local_now.date()),
         }
+
+
+def _weekly_totals(daily_by_date, first, following):
+    weeks = []
+    start = first
+    while start < following:
+        end = min(start + timedelta(days=7 - start.weekday()), following)
+        total = sum(
+            (amount for day, amount in daily_by_date.items() if start <= day < end),
+            start=Decimal("0.00"),
+        )
+        weeks.append(
+            {
+                "start": start.isoformat(),
+                "end": (end - timedelta(days=1)).isoformat(),
+                "total": total,
+            }
+        )
+        start = end
+    return weeks
+
+
+def _donor_risk(latest, today):
+    risk = {"green": 0, "yellow": 0, "red": 0}
+    for row in latest:
+        donated = row["latest_donation"]
+        if donated is None:
+            color = "red"
+        else:
+            days = max((today - as_date(donated)).days, 0)
+            if days < 30:
+                color = "green"
+            elif days < 60:
+                color = "yellow"
+            else:
+                color = "red"
+        risk[color] += 1
+    return risk
 
 
 def as_date(value):

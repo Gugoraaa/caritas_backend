@@ -6,13 +6,13 @@
    Requiere 2026-10-17_recolecciones.sql. No borra nada y no toca otras
    tablas; si hoy ya hay recolecciones agendadas, no hace nada.
 
-   @recolector_id: id del usuario (Users) que hara las recolecciones. NULL =
-   sin asignar (cualquier usuario con sesion las puede abrir).
+   @recolector_id: el repartidor (db/bootstrap/03_role_users.sql). Solo el y
+   el admin pueden abrirlas y resolverlas.
    ============================================================================ */
 
 SET NOCOUNT ON;
 
-DECLARE @recolector_id int = NULL;
+DECLARE @recolector_id int = (SELECT id FROM dbo.Users WHERE email = N'repartidor@caritas.com');
 DECLARE @cuantas int = 5;
 DECLARE @hoy datetime2 = CAST(CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Central Standard Time (Mexico)' AS date) AS datetime2);
 

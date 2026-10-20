@@ -12,8 +12,12 @@ from ...errors import HttpException
 INVALID_TOKEN = "Token inválido o expirado"
 MISSING_TOKEN = "Token requerido"
 ADMIN_REQUIRED = "Admin role required"
+ROLE_REQUIRED = "Your role cannot use this endpoint"
 
 ADMIN_ROLE = "admin"
+# Los mismos valores que permite el CHECK de dbo.Users.role (en mayusculas).
+TELEMARKETING_ROLE = "telemarketina"
+COURIER_ROLE = "recolector"
 
 AuthUser = dict
 
@@ -80,6 +84,32 @@ def require_admin(view: Callable) -> Callable:
         return view(*args, user={**user, "role": role}, **kwargs)
 
     return wrapper
+
+
+def require_role(*roles: str) -> Callable[[Callable], Callable]:
+    """Como require_auth, pero exige uno de `roles` (si no, 403). Admin siempre pasa.
+
+    Igual que require_admin, el rol se lee de Users y no del token.
+    """
+    allowed = {role.lower() for role in roles} | {ADMIN_ROLE}
+
+    def decorator(view: Callable) -> Callable:
+        @wraps(view)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            user = optional_user()
+            if user is None:
+                raise HttpException(401, MISSING_TOKEN)
+
+            role = current_app.extensions["auth"].current_role(user["userId"])
+            if role is None:
+                raise HttpException(401, INVALID_TOKEN)
+            if role.strip().lower() not in allowed:
+                raise HttpException(403, ROLE_REQUIRED)
+            return view(*args, user={**user, "role": role}, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def user_id_from_token_or_query() -> int:

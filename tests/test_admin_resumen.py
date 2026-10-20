@@ -49,6 +49,18 @@ def test_summary_totals_weeks_and_risk_boundaries():
         {"start": "2026-10-26", "end": "2026-10-31", "total": 0},
     ]
     assert result["donor_risk"] == {"green": 0, "yellow": 1, "red": 2}
+    # El total viene de los resultados, no de sumar solo los responsables.
+    assert result["completed_calls_total"] == 2
+
+
+class EmptyOutcomesRepository(FakeRepository):
+    def outcomes(self):
+        return []
+
+
+def test_no_completed_calls_reports_zero():
+    result = service(EmptyOutcomesRepository()).get_summary(datetime(2026, 10, 17))
+    assert result["completed_calls_total"] == 0
 
 
 class FakeUsers:
@@ -87,6 +99,7 @@ def test_endpoint_serializes_and_requires_admin(client):
     assert response.status_code == 200
     assert response.get_json()["fundraising"]["total"] == "12.50"
     assert response.get_json()["call_outcomes"][0]["call_count"] == 2
+    assert response.get_json()["completed_calls_total"] == 2
 
 
 def test_endpoint_auth_errors(client):

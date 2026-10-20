@@ -9,6 +9,13 @@ def test_admin_ipad_routes_and_documentation():
     register_routes(app)
     spec = build_spec()
 
+    assert (
+        spec["components"]["schemas"]["AdminSummary"]["properties"][
+            "completed_calls_total"
+        ]["type"]
+        == "integer"
+    )
+
     for path in ("/admin/summary", "/admin/calls", "/admin/users"):
         assert any(
             rule.rule == path and "GET" in rule.methods

@@ -658,6 +658,10 @@ ADMIN_SUMMARY_SCHEMA = {
                 },
             },
         },
+        "completed_calls_total": {
+            "type": "integer",
+            "description": "Llamadas completadas, incluidas las sin responsable",
+        },
         "call_outcomes": {
             "type": "array",
             "description": "Conteos historicos; no hay fecha de finalizacion de llamada",
@@ -770,6 +774,7 @@ HEALTH_PATHS = {
         }
     },
 }
+
 
 def build_spec() -> dict:
     return {

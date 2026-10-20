@@ -12,6 +12,7 @@ from caritas_backend.modules.auth.guard import (
     optional_user,
     require_admin,
     require_auth,
+    require_role,
     user_id_from_token_or_query,
 )
 from caritas_backend.modules.auth.service import AuthService
@@ -179,3 +180,32 @@ def test_require_admin_is_500_when_db_fails(app):
 )
 def test_is_admin(role, expected):
     assert is_admin(role) is expected
+
+
+def role_view(app, roles):
+    app.extensions["auth"].users = FakeUsers(roles)
+    return require_role("recolector")(lambda user: user)
+
+
+def test_require_role_accepts_listed_role(app):
+    view = role_view(app, {3: "Recolector"})
+    with app.test_request_context("/", headers=bearer({"userId": 3, "role": "x"})):
+        assert view() == {"userId": 3, "role": "Recolector"}
+
+
+def test_require_role_always_accepts_admin(app):
+    view = role_view(app, {1: "admin"})
+    with app.test_request_context("/", headers=bearer({"userId": 1, "role": "admin"})):
+        assert view()["role"] == "admin"
+
+
+def test_require_role_is_403_for_other_roles(app):
+    view = role_view(app, {2: "TELEMARKETINA"})
+    with app.test_request_context("/", headers=bearer({"userId": 2, "role": "RECOLECTOR"})):
+        assert run_status(view).status == 403
+
+
+def test_require_role_rejects_missing_token(app):
+    view = role_view(app, {3: "RECOLECTOR"})
+    with app.test_request_context("/"):
+        assert_401(view, MISSING_TOKEN)

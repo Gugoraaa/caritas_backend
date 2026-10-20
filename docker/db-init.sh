@@ -4,7 +4,7 @@
 #
 #   db/schema/*.sql     estructura       solo si la base no tiene ninguna tabla
 #   db/seed/*.sql       datos mock       solo si no hay donantes (ver DB_SEED)
-#   db/bootstrap/*.sql  usuario admin    siempre (los scripts son idempotentes)
+#   db/bootstrap/*.sql  usuarios y login siempre (los scripts son idempotentes)
 #
 # Dentro de cada carpeta los archivos se aplican en orden alfabetico, por eso
 # van numerados (01_, 02_, ...).
@@ -144,8 +144,10 @@ case "$DB_SEED" in
         ;;
 esac
 
-# --- 3. Usuario admin -------------------------------------------------------
-echo "Asegurando el usuario administrador."
+# --- 3. Usuarios de la app y login de la API ---------------------------------
+# 02_api_login.sql lee API_DB_PASSWORD como variable de sqlcmd.
+: "${API_DB_PASSWORD:?falta la variable de entorno API_DB_PASSWORD}"
+echo "Asegurando los usuarios de la app y el login de la API."
 apply_dir bootstrap
 
 echo "Base '$NAME' lista:"

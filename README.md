@@ -28,10 +28,12 @@ uv run --group prod gunicorn 'caritas_backend:create_app()'
 ```
 
 `gunicorn` vive en el grupo `prod`, que `uv sync` no instala. Es el mismo
-comando que corre la imagen de Docker y el que hay que usar en el servidor;
-puerto, workers y TLS salen de `gunicorn.conf.py` (que también lee el `.env`).
-No usar `python -m caritas_backend` en producción: el servidor de desarrollo
-expone su versión en la cabecera `Server` y no está pensado para carga real.
+comando que corre la imagen de Docker; puerto, workers y TLS salen de
+`gunicorn.conf.py` (que también lee el `.env`).
+
+El servidor (MiniHub) corre `python -m caritas_backend` vía `deploy.sh`, con
+`HOST=0.0.0.0` en su `.env`. `__main__.py` le quita la versión a la cabecera
+`Server` para no dar pistas de qué Werkzeug/Python corre.
 
 ### Certificado TLS (`certs/`)
 

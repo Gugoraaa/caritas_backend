@@ -46,6 +46,8 @@ services:
         condition: service_started
     environment:
       <<: *db-env
+      # Contrasena del login caritas_api que crea db/bootstrap/02_api_login.sql.
+      API_DB_PASSWORD: Equipo1_Api_2026!
       # auto = carga los datos mock solo si la base esta vacia.
       # force = los recarga siempre; skip = no los carga.
       DB_SEED: "${DB_SEED:-auto}"
@@ -65,6 +67,10 @@ services:
         condition: service_completed_successfully
     environment:
       <<: *db-env
+      # La API entra con su propio login (solo SELECT/INSERT/UPDATE/DELETE
+      # sobre dbo), no con sa. Ver db/bootstrap/02_api_login.sql.
+      DB_USER: caritas_api
+      DB_PASSWORD: Equipo1_Api_2026!
       PORT: "3000"
       WEB_CONCURRENCY: "4"
       JWT_SECRET: mwhuHJUEQx1WDpB5GzIov/Eh24qTl5eAU57JjKDX2eui/dwZqMqcKBU+eAHALlyv

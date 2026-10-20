@@ -9,6 +9,7 @@ from .repository import CollectionRow, CollectionsRepository
 INTERNAL_ERROR = "Internal server error"
 NOT_FOUND = "Collection not found"
 NOT_PENDING = "Collection is not pending; it was already resolved"
+NOT_OWNER = "Collection is assigned to another collector"
 INVALID_RANGE = "from must be on or before to"
 
 STATUS_PENDING = "pendiente"
@@ -42,8 +43,8 @@ class CollectionsService:
     def __init__(self, database: Database) -> None:
         self.collections = CollectionsRepository(database)
 
-    def get_collection(self, collection_id: int) -> dict:
-        return to_public_collection(self._find(collection_id))
+    def get_collection(self, collection_id: int, owner_id: int | None = None) -> dict:
+        return to_public_collection(self._find(collection_id, owner_id))
 
     def list_collections(
         self,
@@ -83,8 +84,10 @@ class CollectionsService:
             raise HttpException(500, INTERNAL_ERROR) from error
         return [to_public_history_item(row) for row in rows]
 
-    def confirm(self, collection_id: int, user_id: int) -> dict:
-        row = self._find_pending(collection_id)
+    def confirm(
+        self, collection_id: int, user_id: int, owner_id: int | None = None
+    ) -> dict:
+        row = self._find_pending(collection_id, owner_id)
         collected_at = now_local()
 
         try:
@@ -107,8 +110,10 @@ class CollectionsService:
             }
         )
 
-    def not_collected(self, collection_id: int, reason: str, user_id: int) -> dict:
-        row = self._find_pending(collection_id)
+    def not_collected(
+        self, collection_id: int, reason: str, user_id: int, owner_id: int | None = None
+    ) -> dict:
+        row = self._find_pending(collection_id, owner_id)
         resolved_at = now_local()
 
         try:
@@ -164,13 +169,16 @@ class CollectionsService:
         if not deleted:
             raise HttpException(409, NOT_PENDING)
 
-    def _find_pending(self, collection_id: int) -> CollectionRow:
-        row = self._find(collection_id)
+    def _find_pending(
+        self, collection_id: int, owner_id: int | None = None
+    ) -> CollectionRow:
+        row = self._find(collection_id, owner_id)
         if row["estado"] != STATUS_PENDING:
             raise HttpException(409, NOT_PENDING)
         return row
 
-    def _find(self, collection_id: int) -> CollectionRow:
+    def _find(self, collection_id: int, owner_id: int | None = None) -> CollectionRow:
+        """owner_id None = sin restriccion (admin); si no, debe ser el recolector."""
         try:
             row = self.collections.find(collection_id)
         except Exception as error:
@@ -178,6 +186,8 @@ class CollectionsService:
             raise HttpException(500, INTERNAL_ERROR) from error
         if row is None:
             raise HttpException(404, NOT_FOUND)
+        if owner_id is not None and row["recolector_id"] != owner_id:
+            raise HttpException(403, NOT_OWNER)
         return row
 
 

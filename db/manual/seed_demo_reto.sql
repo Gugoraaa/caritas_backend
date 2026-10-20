@@ -23,14 +23,15 @@ BEGIN TRY
     IF COL_LENGTH(N'dbo.Promesas', N'state') IS NULL
         THROW 51002, 'La tabla Promesas no tiene la columna state esperada.', 1;
 
-    DECLARE @AdminId INT = (
+    /* Las promesas son de la telemarketing (db/bootstrap/03_role_users.sql). */
+    DECLARE @TeleId INT = (
         SELECT TOP (1) id
         FROM dbo.Users
-        WHERE email = N'admin@caritas.com'
+        WHERE email = N'telemarketing@caritas.com'
     );
 
-    IF @AdminId IS NULL
-        THROW 51003, 'No existe admin@caritas.com. Crea o restaura el administrador antes del seed.', 1;
+    IF @TeleId IS NULL
+        THROW 51003, 'No existe telemarketing@caritas.com. Corre db/bootstrap/03_role_users.sql antes del seed.', 1;
 
     DECLARE @Hoy DATE = CAST(DATEADD(HOUR, -6, SYSUTCDATETIME()) AS DATE);
     DECLARE @Ahora DATETIME2(0) = CAST(@Hoy AS DATETIME2(0));
@@ -108,6 +109,8 @@ BEGIN TRY
     /* ---------------------------------------------------------------
        2. Limpieza de datos de demo
        --------------------------------------------------------------- */
+    IF OBJECT_ID(N'dbo.Recolecciones', N'U') IS NOT NULL
+        DELETE FROM dbo.Recolecciones;
     DELETE FROM dbo.Llamadas;
     DELETE FROM dbo.Abonos;
     DELETE FROM dbo.Promesas;
@@ -183,7 +186,7 @@ BEGIN TRY
 
        Una promesa por donante hace que el riesgo del listado de llamadas y
        el riesgo del detalle del donante se basen en la misma información.
-       Todas quedan asignadas al administrador.
+       Todas quedan asignadas a la telemarketing.
        --------------------------------------------------------------- */
     IF COLUMNPROPERTY(OBJECT_ID(N'dbo.Promesas'), N'id', N'IsIdentity') = 1
         SET IDENTITY_INSERT dbo.Promesas ON;
@@ -205,7 +208,7 @@ BEGIN TRY
         NULL,
         CASE WHEN d.id % 3 = 0 THEN 1 ELSE 12 END,
         CASE WHEN d.id % 3 = 0 THEN N'unica' ELSE N'mensual' END,
-        @AdminId
+        @TeleId
     FROM @Donantes d;
 
     IF COLUMNPROPERTY(OBJECT_ID(N'dbo.Promesas'), N'id', N'IsIdentity') = 1
@@ -308,13 +311,13 @@ BEGIN TRY
     /* ---------------------------------------------------------------
        8. Resumen verificable
        --------------------------------------------------------------- */
-    SELECT N'Admin' AS dato, CAST(@AdminId AS NVARCHAR(100)) AS valor
+    SELECT N'Telemarketing' AS dato, CAST(@TeleId AS NVARCHAR(100)) AS valor
     UNION ALL SELECT N'Donantes', CAST(COUNT(*) AS NVARCHAR(100)) FROM dbo.Donantes
     UNION ALL SELECT N'Causas', CAST(COUNT(*) AS NVARCHAR(100)) FROM dbo.Causas
     UNION ALL SELECT N'Promesas', CAST(COUNT(*) AS NVARCHAR(100)) FROM dbo.Promesas
     UNION ALL SELECT N'Abonos', CAST(COUNT(*) AS NVARCHAR(100)) FROM dbo.Abonos
     UNION ALL SELECT N'Llamadas', CAST(COUNT(*) AS NVARCHAR(100)) FROM dbo.Llamadas
-    UNION ALL SELECT N'Promesas del admin', CAST(COUNT(*) AS NVARCHAR(100)) FROM dbo.Promesas WHERE responsable_id = @AdminId
+    UNION ALL SELECT N'Promesas de telemarketing', CAST(COUNT(*) AS NVARCHAR(100)) FROM dbo.Promesas WHERE responsable_id = @TeleId
     UNION ALL SELECT N'Colonias vacías', CAST(COUNT(*) AS NVARCHAR(100)) FROM dbo.Donantes WHERE colonia IS NULL OR LTRIM(RTRIM(colonia)) = N'';
 
 END TRY

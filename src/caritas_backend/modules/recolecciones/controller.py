@@ -12,7 +12,7 @@ from ...validation import (
     optional,
     validate_body,
 )
-from ..auth.guard import AuthUser, require_auth
+from ..auth.guard import COURIER_ROLE, AuthUser, is_admin, require_admin, require_role
 from .service import NOT_COLLECTED_REASONS, get_reasons
 
 blueprint = Blueprint("collections", __name__)
@@ -38,13 +38,13 @@ UPDATE_RULES = {
 
 
 @blueprint.get("/collections")
-@require_auth
+@require_role(COURIER_ROLE)
 def list_collections(user: AuthUser) -> Response:
     collections_service = current_app.extensions["collections"]
     return jsonify(
         collections_service.list_collections(
             request.args.get("status"),
-            _parse_int("collector_id"),
+            _parse_int("collector_id") if is_admin(user["role"]) else user["userId"],
             _parse_date("from"),
             _parse_date("to"),
         )
@@ -57,7 +57,7 @@ def get_not_collected_reasons() -> Response:
 
 
 @blueprint.get("/collections/history")
-@require_auth
+@require_role(COURIER_ROLE)
 def get_collection_history(user: AuthUser) -> Response:
     collections_service = current_app.extensions["collections"]
     return jsonify(
@@ -68,14 +68,14 @@ def get_collection_history(user: AuthUser) -> Response:
 
 
 @blueprint.get("/collections/<int:collection_id>")
-@require_auth
+@require_role(COURIER_ROLE)
 def get_collection(collection_id: int, user: AuthUser) -> Response:
     collections_service = current_app.extensions["collections"]
-    return jsonify(collections_service.get_collection(collection_id))
+    return jsonify(collections_service.get_collection(collection_id, _owner(user)))
 
 
 @blueprint.patch("/collections/<int:collection_id>")
-@require_auth
+@require_admin
 @validate_body(UPDATE_RULES)
 def update_collection(collection_id: int, user: AuthUser, body: dict) -> Response:
     collections_service = current_app.extensions["collections"]
@@ -83,7 +83,7 @@ def update_collection(collection_id: int, user: AuthUser, body: dict) -> Respons
 
 
 @blueprint.delete("/collections/<int:collection_id>")
-@require_auth
+@require_admin
 def delete_collection(collection_id: int, user: AuthUser) -> tuple[str, int]:
     collections_service = current_app.extensions["collections"]
     collections_service.delete(collection_id)
@@ -91,20 +91,29 @@ def delete_collection(collection_id: int, user: AuthUser) -> tuple[str, int]:
 
 
 @blueprint.post("/collections/<int:collection_id>/confirm")
-@require_auth
+@require_role(COURIER_ROLE)
 def confirm_collection(collection_id: int, user: AuthUser) -> Response:
     collections_service = current_app.extensions["collections"]
-    return jsonify(collections_service.confirm(collection_id, user["userId"]))
+    return jsonify(
+        collections_service.confirm(collection_id, user["userId"], _owner(user))
+    )
 
 
 @blueprint.post("/collections/<int:collection_id>/not-collected")
-@require_auth
+@require_role(COURIER_ROLE)
 @validate_body(NOT_COLLECTED_RULES)
 def not_collected(collection_id: int, user: AuthUser, body: dict) -> Response:
     collections_service = current_app.extensions["collections"]
     return jsonify(
-        collections_service.not_collected(collection_id, body["reason"], user["userId"])
+        collections_service.not_collected(
+            collection_id, body["reason"], user["userId"], _owner(user)
+        )
     )
+
+
+def _owner(user: AuthUser) -> int | None:
+    """El repartidor solo puede tocar sus recolecciones; admin, todas."""
+    return None if is_admin(user["role"]) else user["userId"]
 
 
 def _parse_date(name: str) -> date | None:

@@ -79,5 +79,7 @@ def close_quietly(connection: pymssql.Connection | None) -> None:
     try:
         if connection is not None:
             connection.close()
-    except Exception:
-        pass
+    except Exception as error:
+        # La conexion ya se esta descartando: no hay nada que hacer, pero que
+        # quede registro.
+        log.debug("No se pudo cerrar la conexion: %s", error)

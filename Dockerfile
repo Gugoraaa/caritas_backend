@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --group prod --no-install-project
 
 # Capa del proyecto: se invalida con cada cambio de codigo.
-COPY README.md ./
+COPY README.md gunicorn.conf.py ./
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --group prod
@@ -42,4 +42,5 @@ EXPOSE 3000
 
 # Sin .env dentro de la imagen: la configuracion entra por variables de entorno
 # (docker-compose.yml). load_dotenv() no sobreescribe lo que ya esta en el env.
-CMD ["sh", "-c", "exec gunicorn -w ${WEB_CONCURRENCY:-4} -b 0.0.0.0:${PORT:-3000} 'caritas_backend:create_app()'"]
+# Puerto, workers y TLS salen de gunicorn.conf.py.
+CMD ["gunicorn", "caritas_backend:create_app()"]

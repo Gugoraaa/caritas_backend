@@ -393,6 +393,61 @@ def _collection_response(description: str) -> dict:
 
 
 COLLECTION_PATHS = {
+    "/collections": {
+        "get": {
+            "tags": ["collections"],
+            "summary": "Lista de recolecciones",
+            "description": (
+                "Todas las recolecciones, de la mas reciente a la mas vieja por "
+                "fecha_programada. Todos los filtros son opcionales; from/to son "
+                "dias inclusivos."
+            ),
+            "security": BEARER,
+            "parameters": [
+                {
+                    "name": "status",
+                    "in": "query",
+                    "required": False,
+                    "schema": {
+                        "type": "string",
+                        "enum": ["pendiente", "confirmada", "no_recolectada"],
+                    },
+                },
+                {
+                    "name": "collector_id",
+                    "in": "query",
+                    "required": False,
+                    "schema": {"type": "integer"},
+                },
+                *(
+                    {
+                        "name": name,
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string", "format": "date"},
+                        "example": example,
+                    }
+                    for name, example in (("from", "2026-10-01"), ("to", "2026-10-18"))
+                ),
+            ],
+            "responses": {
+                "200": {
+                    "description": "Recolecciones que cumplen los filtros",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {"$ref": COLLECTION_REF},
+                            }
+                        }
+                    },
+                },
+                "400": ERROR_RESPONSES["400"],
+                "401": ERROR_RESPONSES["401"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        }
+    },
     "/collections/reasons": {
         "get": {
             "tags": ["collections"],

@@ -36,6 +36,21 @@ UPDATE_RULES = {
     "address_notes": [(optional(max_length(500)), "must be a string of at most 500 characters")],
 }
 
+CREATE_RULES = {
+    "promise_id": [(is_integer, "must be an integer")],
+    "scheduled_at": [(is_string, "must be an ISO date-time string")],
+    "amount": [(min_value(0.01), "must be a number greater than 0")],
+    **{k: v for k, v in UPDATE_RULES.items() if k not in ("scheduled_at", "amount")},
+}
+
+
+@blueprint.post("/collections")
+@require_admin
+@validate_body(CREATE_RULES)
+def create_collection(user: AuthUser, body: dict) -> tuple[Response, int]:
+    collections_service = current_app.extensions["collections"]
+    return jsonify(collections_service.create(body)), 201
+
 
 @blueprint.get("/collections")
 @require_role(COURIER_ROLE)

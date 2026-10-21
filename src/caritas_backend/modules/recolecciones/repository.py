@@ -79,6 +79,14 @@ NOT_COLLECTED_QUERY = """UPDATE Recolecciones
                           WHERE id = %s
                             AND estado = 'pendiente';"""
 
+PROMISE_EXISTS_QUERY = """SELECT id FROM Promesas WHERE id = %s;"""
+
+INSERT_QUERY = """INSERT INTO Recolecciones
+                      (promesa_id, recolector_id, fecha_programada, ventana_inicio,
+                       ventana_fin, monto, notas_domicilio)
+                  OUTPUT INSERTED.id
+                  VALUES (%s, %s, %s, %s, %s, %s, %s);"""
+
 DELETE_QUERY = """DELETE FROM Recolecciones WHERE id = %s AND estado = 'pendiente';"""
 
 # Nombres de columna fijos (nunca del cliente): solo cambian los valores.
@@ -201,6 +209,27 @@ class CollectionsRepository:
                 updated = cursor.rowcount > 0
                 connection.commit()
                 return updated
+            finally:
+                cursor.close()
+
+    def promise_exists(self, promise_id: int) -> bool:
+        with self._database.connection() as connection:
+            cursor = connection.cursor(as_dict=True)
+            try:
+                cursor.execute(PROMISE_EXISTS_QUERY, (promise_id,))
+                return cursor.fetchone() is not None
+            finally:
+                cursor.close()
+
+    def insert(self, values: tuple) -> int:
+        """values en el orden de INSERT_QUERY; regresa el id nuevo."""
+        with self._database.connection() as connection:
+            cursor = connection.cursor(as_dict=True)
+            try:
+                cursor.execute(INSERT_QUERY, values)
+                new_id = cursor.fetchone()["id"]
+                connection.commit()
+                return new_id
             finally:
                 cursor.close()
 

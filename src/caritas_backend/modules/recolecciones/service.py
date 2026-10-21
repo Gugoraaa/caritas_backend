@@ -136,6 +136,34 @@ class CollectionsService:
             }
         )
 
+    def create(self, fields: dict) -> dict:
+        """Agenda una recoleccion pendiente para una promesa; fields usa nombres publicos."""
+        scheduled_at = parse_datetime(fields["scheduled_at"], "scheduled_at")
+        window_start, window_end = (
+            parse_datetime(fields[name], name) if fields.get(name) else None
+            for name in ("window_start", "window_end")
+        )
+        try:
+            if not self.collections.promise_exists(fields["promise_id"]):
+                raise HttpException(404, "Promise not found")
+            new_id = self.collections.insert(
+                (
+                    fields["promise_id"],
+                    fields.get("collector_id"),
+                    scheduled_at,
+                    window_start,
+                    window_end,
+                    fields["amount"],
+                    fields.get("address_notes"),
+                )
+            )
+        except HttpException:
+            raise
+        except Exception as error:
+            log.exception("Failed to create collection")
+            raise HttpException(500, INTERNAL_ERROR) from error
+        return self.get_collection(new_id)
+
     def update(self, collection_id: int, fields: dict) -> dict:
         """Edita una recoleccion pendiente; fields usa los nombres publicos."""
         if not fields:

@@ -394,6 +394,39 @@ def _collection_response(description: str) -> dict:
 
 COLLECTION_PATHS = {
     "/collections": {
+        "post": {
+            "tags": ["collections"],
+            "summary": "Agenda una recoleccion",
+            "description": "Solo admin. Crea una recoleccion pendiente para una promesa.",
+            "security": BEARER,
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["promise_id", "scheduled_at", "amount"],
+                            "properties": {
+                                "promise_id": {"type": "integer"},
+                                "collector_id": {"type": "integer", "nullable": True},
+                                "scheduled_at": {"type": "string", "format": "date-time"},
+                                "window_start": {"type": "string", "format": "date-time", "nullable": True},
+                                "window_end": {"type": "string", "format": "date-time", "nullable": True},
+                                "amount": {"type": "number", "minimum": 0.01},
+                                "address_notes": {"type": "string", "maxLength": 500, "nullable": True},
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                "201": _collection_response("Recoleccion creada"),
+                "400": ERROR_RESPONSES["400"],
+                "401": ERROR_RESPONSES["401"],
+                "404": ERROR_RESPONSES["404"],
+                "500": ERROR_RESPONSES["500"],
+            },
+        },
         "get": {
             "tags": ["collections"],
             "summary": "Lista de recolecciones",

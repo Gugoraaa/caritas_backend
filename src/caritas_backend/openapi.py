@@ -1177,6 +1177,71 @@ def build_spec() -> dict:
                     },
                 }
             },
+            "/seed": {
+                "post": {
+                    "tags": ["calls"],
+                    "security": OPTIONAL_BEARER,
+                    "summary": "Agenda 5 llamadas pendientes de hoy (solo demo)",
+                    "description": (
+                        "Uso interno para demos. Toma hasta 5 promesas "
+                        "activas de la telemarketina que llama y agenda una llamada "
+                        "pendiente para hoy en cada una, con hora y proposito "
+                        "aleatorios."
+                    ),
+                    "responses": {
+                        "200": {
+                            "description": "Llamadas insertadas",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "inserted": {
+                                                "type": "integer",
+                                                "example": 5,
+                                            }
+                                        },
+                                    }
+                                }
+                            },
+                        },
+                        "400": ERROR_RESPONSES["400"],
+                        "401": ERROR_RESPONSES["401"],
+                        "403": ERROR_RESPONSES["403"],
+                        "409": {"description": "El usuario no tiene promesas activas"},
+                        "500": ERROR_RESPONSES["500"],
+                    },
+                }
+            },
+            "/calls/pending": {
+                "get": {
+                    "tags": ["calls"],
+                    "security": OPTIONAL_BEARER,
+                    "summary": "Obtiene las llamadas pendientes de hoy",
+                    "description": (
+                        "Llamadas agendadas para hoy que todavia no se han registrado."
+                    ),
+                    "parameters": [USER_ID_PARAM],
+                    "responses": {
+                        "200": {
+                            "description": "Pending calls",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/components/schemas/ScheduledCall"
+                                        },
+                                    }
+                                }
+                            },
+                        },
+                        "400": ERROR_RESPONSES["400"],
+                        "401": ERROR_RESPONSES["401"],
+                        "500": ERROR_RESPONSES["500"],
+                    },
+                }
+            },
             "/calls/{call_id}": {
                 "patch": {
                     "tags": ["calls"],

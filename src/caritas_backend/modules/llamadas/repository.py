@@ -27,10 +27,15 @@ QUERY = """SELECT
                ORDER BY a.fecha_deposito DESC
            ) ultimo
           WHERE p.responsable_id = %s
-            AND l.estado IN ('agendada', 'completada')
+            AND l.estado IN %s
             AND l.fecha_agendada >= %s
             AND l.fecha_agendada < %s
           ORDER BY l.fecha_agendada;"""
+
+ACTIVE_PROMISES_QUERY = """SELECT id
+                             FROM Promesas
+                            WHERE responsable_id = %s
+                              AND state = 'activo';"""
 
 OWNER_QUERY = """SELECT l.id AS call_id, p.responsable_id
                    FROM Llamadas l
@@ -98,13 +103,43 @@ class CallsRepository:
         self._database = database
 
     def find_scheduled_between(
-        self, user_id: int, start: datetime, end: datetime
+        self, user_id: int, start: datetime, end: datetime, statuses: tuple[str, ...]
     ) -> list[CallRow]:
         with self._database.connection() as connection:
             cursor = connection.cursor(as_dict=True)
             try:
-                cursor.execute(QUERY, (user_id, start, end))
+                # pymssql expande la tupla de estados en la lista del IN.
+                cursor.execute(QUERY, (user_id, statuses, start, end))
                 return cursor.fetchall()
+            finally:
+                cursor.close()
+
+    def find_active_promise_ids(self, user_id: int) -> list[int]:
+        with self._database.connection() as connection:
+            cursor = connection.cursor(as_dict=True)
+            try:
+                cursor.execute(ACTIVE_PROMISES_QUERY, (user_id,))
+                return [row["id"] for row in cursor.fetchall()]
+            finally:
+                cursor.close()
+
+    def insert_calls(self, rows: list[dict]) -> None:
+        with self._database.connection() as connection:
+            cursor = connection.cursor()
+            try:
+                for row in rows:
+                    cursor.execute(
+                        INSERT_CALL_QUERY,
+                        (
+                            row["promesa_id"],
+                            row["resultado_llamado"],
+                            row["monto_comprometido"],
+                            row["estado"],
+                            row["proposito"],
+                            row["fecha_agendada"],
+                        ),
+                    )
+                connection.commit()
             finally:
                 cursor.close()
 

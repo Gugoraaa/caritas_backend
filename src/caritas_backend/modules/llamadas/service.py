@@ -1,4 +1,5 @@
 import logging
+import random
 from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -37,6 +38,18 @@ STATUS_SCHEDULED = "agendada"
 STATUS_COMPLETED = "completada"
 PENDING_RESULT = "pendiente"
 
+SCHEDULED_STATES = (STATUS_SCHEDULED, STATUS_COMPLETED)
+PENDING_STATES = (STATUS_SCHEDULED,)
+
+SEED_COUNT = 5
+SEED_PURPOSES = (
+    "seguimiento",
+    "recordatorio de pago",
+    "agradecimiento",
+    "invitacion a evento",
+)
+NO_ACTIVE_PROMISES = "No hay promesas activas para este usuario"
+
 # Monterrey es UTC-6 todo el anio (sin horario de verano desde 2022).
 # El servidor corre en UTC: sin esto, la ventana de "hoy" se voltea a las
 # 18:00 hora local y la pantalla se vacia todas las noches.
@@ -50,11 +63,44 @@ class CallsService:
         self.calls = CallsRepository(database)
 
     def get_scheduled_today_tomorrow(self, user_id: int) -> list[dict]:
+        return self._list_calls(user_id, days=2, statuses=SCHEDULED_STATES)
+
+    def get_pending_today(self, user_id: int) -> list[dict]:
+        return self._list_calls(user_id, days=1, statuses=PENDING_STATES)
+
+    def seed_pending_today(self, user_id: int) -> dict:
+        """Agenda hasta SEED_COUNT pendientes de hoy, en promesas distintas."""
         today = today_local()
-        tomorrow_end = today + timedelta(days=2)
+        promise_ids = self._query(
+            "active promises", self.calls.find_active_promise_ids, user_id
+        )
+        if not promise_ids:
+            raise HttpException(409, NO_ACTIVE_PROMISES)
+
+        rows = [
+            {
+                "promesa_id": promise_id,
+                "resultado_llamado": PENDING_RESULT,
+                "monto_comprometido": None,
+                "estado": STATUS_SCHEDULED,
+                "proposito": random.choice(SEED_PURPOSES),
+                "fecha_agendada": today + timedelta(hours=random.randint(9, 18)),
+            }
+            for promise_id in random.sample(
+                promise_ids, min(SEED_COUNT, len(promise_ids))
+            )
+        ]
+        self._query("seed calls", self.calls.insert_calls, rows)
+        return {"inserted": len(rows)}
+
+    def _list_calls(
+        self, user_id: int, days: int, statuses: tuple[str, ...]
+    ) -> list[dict]:
+        today = today_local()
+        end = today + timedelta(days=days)
 
         try:
-            rows = self.calls.find_scheduled_between(user_id, today, tomorrow_end)
+            rows = self.calls.find_scheduled_between(user_id, today, end, statuses)
         except Exception as error:
             log.exception("Failed to fetch scheduled calls")
             raise HttpException(500, INTERNAL_ERROR) from error

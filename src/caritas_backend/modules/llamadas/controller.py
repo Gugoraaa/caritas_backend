@@ -55,6 +55,13 @@ def get_scheduled_calls(user: AuthUser) -> Response:
     return jsonify(calls_service.get_scheduled_today_tomorrow(user["userId"]))
 
 
+@blueprint.get("/calls/pending")
+@require_role(TELEMARKETING_ROLE)
+def get_pending_calls(user: AuthUser) -> Response:
+    calls_service = current_app.extensions["calls"]
+    return jsonify(calls_service.get_pending_today(user["userId"]))
+
+
 @blueprint.patch("/calls/<int:call_id>")
 @require_role(TELEMARKETING_ROLE)
 @validate_body(UPDATE_RULES)
